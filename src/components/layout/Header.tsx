@@ -3,53 +3,78 @@
 import { usePathname } from 'next/navigation';
 
 const PAGE_TITLES: Record<string, string> = {
-  '/projecten':          'Projecten',
-  '/planning':           'Planning',
-  '/analyse':            'Analyse',
-  '/boringen':           'Boringen',
-  '/duikers':            'Duikers',
-  '/proefsleuven':       'Proefsleuven',
-  '/omgevingsmanagement':'Omgevingsmanagement',
+  '/projecten':           'Projecten',
+  '/planning':            'Planning',
+  '/analyse':             'Analyse',
+  '/boringen':            'Boringen',
+  '/duikers':             'Duikers',
+  '/proefsleuven':        'Proefsleuven',
+  '/omgevingsmanagement': 'Omgevingsmanagement',
 };
 
-export function HVPLogo({ size = 36 }: { size?: number }) {
-  const r = 11;
-  const cx1 = 13, cy1 = 13;
-  const cx2 = 31, cy2 = 13;
-  const cx3 = 22, cy3 = 27;
-
+/* HPV logo — drie overlappende cirkels, exact naar origineel */
+export function HVPLogo({ size = 40 }: { size?: number }) {
   return (
-    <svg width={size} height={size * 0.88} viewBox="0 0 44 39" fill="none" xmlns="http://www.w3.org/2000/svg">
-      {/* H - top left */}
-      <circle cx={cx1} cy={cy1} r={r + 1.5} fill="#1A0505"/>
-      <circle cx={cx1} cy={cy1} r={r} fill="#8B1418"/>
-      <circle cx={cx1} cy={cy1} r={r - 1.5} fill="#9E1A1E"/>
-      <circle cx={cx1} cy={cy1} r={r - 3} fill="none" stroke="rgba(255,255,255,0.10)" strokeWidth="0.8"/>
-      <circle cx={cx1} cy={cy1} r={r - 4.5} fill="#8B1418"/>
-      <text x={cx1} y={cy1 + 4} textAnchor="middle" fontFamily="Georgia, serif" fontSize="10" fontWeight="700" fill="#9DB5C8" letterSpacing="-0.3">H</text>
+    <svg
+      width={size}
+      height={size * 0.84}
+      viewBox="0 0 50 42"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <defs>
+        <radialGradient id="rg1" cx="38%" cy="32%" r="65%">
+          <stop offset="0%" stopColor="#B52030"/>
+          <stop offset="60%" stopColor="#8B1520"/>
+          <stop offset="100%" stopColor="#5C0C12"/>
+        </radialGradient>
+        <radialGradient id="rg2" cx="38%" cy="32%" r="65%">
+          <stop offset="0%" stopColor="#B52030"/>
+          <stop offset="60%" stopColor="#8B1520"/>
+          <stop offset="100%" stopColor="#5C0C12"/>
+        </radialGradient>
+        <radialGradient id="rg3" cx="38%" cy="32%" r="65%">
+          <stop offset="0%" stopColor="#B52030"/>
+          <stop offset="60%" stopColor="#8B1520"/>
+          <stop offset="100%" stopColor="#5C0C12"/>
+        </radialGradient>
+      </defs>
 
-      {/* P - top right */}
-      <circle cx={cx2} cy={cy2} r={r + 1.5} fill="#1A0505"/>
-      <circle cx={cx2} cy={cy2} r={r} fill="#8B1418"/>
-      <circle cx={cx2} cy={cy2} r={r - 1.5} fill="#9E1A1E"/>
-      <circle cx={cx2} cy={cy2} r={r - 3} fill="none" stroke="rgba(255,255,255,0.10)" strokeWidth="0.8"/>
-      <circle cx={cx2} cy={cy2} r={r - 4.5} fill="#8B1418"/>
-      <text x={cx2} y={cy2 + 4} textAnchor="middle" fontFamily="Georgia, serif" fontSize="10" fontWeight="700" fill="#9DB5C8" letterSpacing="-0.3">P</text>
+      {/* H — links boven */}
+      <circle cx="14" cy="14" r="14" fill="#120005"/>
+      <circle cx="14" cy="14" r="12.5" fill="url(#rg1)"/>
+      <circle cx="14" cy="14" r="10"   fill="none" stroke="rgba(255,255,255,0.13)" strokeWidth="1"/>
+      <circle cx="14" cy="14" r="7.5"  fill="none" stroke="rgba(0,0,0,0.25)"       strokeWidth="0.6"/>
+      <text x="14" y="18.5" textAnchor="middle"
+            fontFamily="Georgia, 'Times New Roman', serif"
+            fontSize="11" fontWeight="700"
+            fill="#8EB0C8" letterSpacing="0">H</text>
 
-      {/* V - bottom center */}
-      <circle cx={cx3} cy={cy3} r={r + 1.5} fill="#1A0505"/>
-      <circle cx={cx3} cy={cy3} r={r} fill="#8B1418"/>
-      <circle cx={cx3} cy={cy3} r={r - 1.5} fill="#9E1A1E"/>
-      <circle cx={cx3} cy={cy3} r={r - 3} fill="none" stroke="rgba(255,255,255,0.10)" strokeWidth="0.8"/>
-      <circle cx={cx3} cy={cy3} r={r - 4.5} fill="#8B1418"/>
-      <text x={cx3} y={cy3 + 4} textAnchor="middle" fontFamily="Georgia, serif" fontSize="10" fontWeight="700" fill="#9DB5C8" letterSpacing="-0.3">V</text>
+      {/* P — rechts boven */}
+      <circle cx="36" cy="14" r="14" fill="#120005"/>
+      <circle cx="36" cy="14" r="12.5" fill="url(#rg2)"/>
+      <circle cx="36" cy="14" r="10"   fill="none" stroke="rgba(255,255,255,0.13)" strokeWidth="1"/>
+      <circle cx="36" cy="14" r="7.5"  fill="none" stroke="rgba(0,0,0,0.25)"       strokeWidth="0.6"/>
+      <text x="36" y="18.5" textAnchor="middle"
+            fontFamily="Georgia, 'Times New Roman', serif"
+            fontSize="11" fontWeight="700"
+            fill="#8EB0C8" letterSpacing="0">P</text>
+
+      {/* V — midden onder */}
+      <circle cx="25" cy="29" r="14" fill="#120005"/>
+      <circle cx="25" cy="29" r="12.5" fill="url(#rg3)"/>
+      <circle cx="25" cy="29" r="10"   fill="none" stroke="rgba(255,255,255,0.13)" strokeWidth="1"/>
+      <circle cx="25" cy="29" r="7.5"  fill="none" stroke="rgba(0,0,0,0.25)"       strokeWidth="0.6"/>
+      <text x="25" y="33.5" textAnchor="middle"
+            fontFamily="Georgia, 'Times New Roman', serif"
+            fontSize="11" fontWeight="700"
+            fill="#8EB0C8" letterSpacing="0">V</text>
     </svg>
   );
 }
 
 export default function Header() {
   const pathname = usePathname();
-
   const title = Object.entries(PAGE_TITLES).find(([key]) =>
     pathname.startsWith(key)
   )?.[1] ?? 'HVP Board';
@@ -57,8 +82,10 @@ export default function Header() {
   return (
     <header className="site-header">
       <div className="logo">
-        <HVPLogo size={36} />
-        <span>HVP<span style={{ fontWeight: 400, color: 'var(--accent)' }}>Board</span></span>
+        <HVPLogo size={38} />
+        <span>
+          HVP<span style={{ fontWeight: 400, color: 'var(--accent)' }}>Board</span>
+        </span>
       </div>
 
       <div className="hdr-sep" />
