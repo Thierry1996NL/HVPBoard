@@ -4,7 +4,7 @@ import { ToastProvider } from '@/components/ui/ToastProvider';
 
 export const metadata: Metadata = {
   title: 'HVP Board',
-  description: 'Projectbeheer en voortgang — Borevexa',
+  description: 'Projectbeheer en voortgang',
   manifest: '/manifest.json',
 };
 

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { HVPLogo } from './Header';
 
 interface NavItem {
   href: string;
@@ -95,33 +96,32 @@ export default function Sidebar() {
   return (
     <>
       <nav className={`sidebar${collapsed ? ' collapsed' : ''}`}>
-        {/* Merk-indicator bovenin */}
+        {/* Logo bovenin */}
         <div style={{
-          padding: '0.875rem 1rem 0.625rem',
+          padding: '10px 14px 10px',
           borderBottom: '0.5px solid rgba(255,255,255,0.06)',
           display: 'flex',
           alignItems: 'center',
-          gap: 8,
+          gap: 10,
           overflow: 'hidden',
         }}>
+          <div style={{ flexShrink: 0 }}>
+            <HVPLogo size={32} />
+          </div>
           <div style={{
-            width: 6, height: 6,
-            borderRadius: '50%',
-            background: '#00F5B4',
-            flexShrink: 0,
-          }} />
-          <span style={{
-            fontSize: 9,
-            fontWeight: 500,
-            letterSpacing: '0.08em',
-            textTransform: 'uppercase',
-            color: 'rgba(255,255,255,0.25)',
-            whiteSpace: 'nowrap',
-            transition: 'opacity 0.15s',
+            overflow: 'hidden',
+            transition: 'opacity 0.15s, width 0.22s',
             opacity: collapsed ? 0 : 1,
+            width: collapsed ? 0 : 'auto',
+            whiteSpace: 'nowrap',
           }}>
-            Prescan &amp; Ontwerp
-          </span>
+            <div style={{ fontSize: 13, fontWeight: 500, color: '#fff', letterSpacing: '-0.2px' }}>
+              HVP<span style={{ fontWeight: 400, color: '#00F5B4' }}>Board</span>
+            </div>
+            <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.25)', letterSpacing: '0.06em', marginTop: 1 }}>
+              v1.0
+            </div>
+          </div>
         </div>
 
         <div className="sidebar-content">
@@ -139,22 +139,6 @@ export default function Sidebar() {
               </Link>
             </div>
           ))}
-
-          <div className="sb-divider" style={{ margin: '0.75rem 1rem' }} />
-
-          {/* Versie-info */}
-          <div style={{
-            padding: '0.375rem 1rem',
-            fontSize: 9,
-            color: 'rgba(255,255,255,0.18)',
-            letterSpacing: '0.04em',
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            transition: 'opacity 0.15s',
-            opacity: collapsed ? 0 : 1,
-          }}>
-            HVP Board · 1.0
-          </div>
         </div>
       </nav>
 
