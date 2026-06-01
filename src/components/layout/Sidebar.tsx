@@ -80,7 +80,7 @@ export default function Sidebar() {
             whiteSpace: 'nowrap',
           }}>
             <div style={{ fontSize: 13, fontWeight: 500, color: '#fff', letterSpacing: '-0.2px' }}>
-              HVP<span style={{ fontWeight: 400, color: '#00F5B4' }}>Board</span>
+              HVP<span style={{ fontWeight: 400, color: 'rgba(255,255,255,0.5)' }}>Board</span>
             </div>
           </div>
         </div>

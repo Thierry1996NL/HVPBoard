@@ -22,17 +22,17 @@
   --text-4: #9CA3AF;
 
   /* Deep Mint – primaire accentkleur */
-  --accent:       #007A5A;
-  --accent-hover: #005F46;
-  --accent-2:     rgba(0, 122, 90, 0.08);
-  --accent-3:     rgba(0, 122, 90, 0.04);
-  --accent-sub:   #2D7A70;   /* slagzin-tint voor subtekst */
+  --accent:       #3D6B9E;
+  --accent-hover: #2E5488;
+  --accent-2:     rgba(61, 107, 158, 0.08);
+  --accent-3:     rgba(61, 107, 158, 0.04);
+  --accent-sub:   #4A7FAF;   /* slagzin-tint voor subtekst */
 
   /* ── Statusbadges light mode ─────────────────────────────────────────── */
   /* Gereed → groen */
   --g-fg: #065F46; --g-bg: #D1FAE5; --g-mid: #A7F3D0;
   /* Loopt → mint-teal */
-  --l-fg: #007A5A; --l-bg: #F0FDF4; --l-mid: #D1FAE5;
+  --l-fg: #3D6B9E; --l-bg: #EFF4FB; --l-mid: #BFCFE8;
   /* Review → amber */
   --r-fg: #92400E; --r-bg: #FEF3C7; --r-mid: #FDE68A;
   /* Geblokkeerd → rood */
@@ -52,12 +52,12 @@
   --navy-4: #2A3D54;
 
   /* ── Fase-kleuren ────────────────────────────────────────────────────── */
-  --fase-analyse:     #007A5A; --fase-analyse-bg:     #F0FDF4;
-  --fase-vo:          #065F46; --fase-vo-bg:          #D1FAE5;
-  --fase-do:          #2D7A70; --fase-do-bg:          #F0FDFA;
+  --fase-analyse:     #3D6B9E; --fase-analyse-bg:     #EFF4FB;
+  --fase-vo:          #2E5488; --fase-vo-bg:          #E3EBF5;
+  --fase-do:          #4A7FAF; --fase-do-bg:          #EBF3FA;
   --fase-onderzoek:   #4F46E5; --fase-onderzoek-bg:   #EEF2FF;
   --fase-uo:          #991B1B; --fase-uo-bg:          #FEE2E2;
-  --fase-natuur:      #065F46; --fase-natuur-bg:      #D1FAE5;
+  --fase-natuur:      #2E7D32; --fase-natuur-bg:      #E8F5E9;
   --fase-archeologie: #7C2D12; --fase-archeologie-bg: #FFF7ED;
   --fase-bodem:       #374151; --fase-bodem-bg:       #F3F4F6;
   --fase-nge:         #92400E; --fase-nge-bg:         #FEF3C7;
@@ -180,7 +180,7 @@ body {
 }
 .sb-item:hover { background: rgba(255,255,255,0.06); color: #fff; }
 .sb-item.active {
-  background: rgba(0,122,90,0.18);
+  background: rgba(61,107,158,0.18);
   color: #fff;
   border-left-color: var(--accent);
 }
@@ -192,7 +192,7 @@ body {
   transition: background 0.1s;
 }
 .sb-item:hover .sb-icon { background: rgba(255,255,255,0.07); }
-.sb-item.active .sb-icon { background: rgba(0,122,90,0.3); }
+.sb-item.active .sb-icon { background: rgba(61,107,158,0.28); }
 .sb-label {
   flex: 1;
   overflow: hidden;
