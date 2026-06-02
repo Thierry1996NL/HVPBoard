@@ -30,7 +30,7 @@ interface Boring {
   vervallen?: boolean;
 }
 
-/* ── Kleurcodering zoals Excel ───────────────────────────────────────────────── */
+/* ── Kleuren ─────────────────────────────────────────────────────────────────── */
 const SC: Record<string, { bg: string; fg: string }> = {
   'Vrijgegeven':  { bg: '#1A7F3C', fg: '#fff' },
   'Goedgekeurd':  { bg: '#8BC34A', fg: '#fff' },
@@ -38,8 +38,8 @@ const SC: Record<string, { bg: string; fg: string }> = {
   'Gestart':      { bg: '#F5A623', fg: '#fff' },
   'Issue':        { bg: '#D70015', fg: '#fff' },
   'Vertraagd':    { bg: '#D70015', fg: '#fff' },
-  'Niet gestart': { bg: '#F3F4F6', fg: '#6B7280' },
-  'Vervallen':    { bg: '#EBEBEB', fg: '#9CA3AF' },
+  'Niet gestart': { bg: '#E5E7EB', fg: '#6B7280' },
+  'Vervallen':    { bg: '#F3F4F6', fg: '#9CA3AF' },
 };
 
 function Pill({ status }: { status?: string }) {
@@ -67,23 +67,252 @@ function TekBar({ pct }: { pct?: number }) {
   );
 }
 
-/* ── Pagina ──────────────────────────────────────────────────────────────────── */
+/* ── Gantt chart ─────────────────────────────────────────────────────────────── */
+function GanttChart({ boringen }: { boringen: Boring[] }) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  // Alleen boringen met een planning datum
+  const withDate = boringen.filter(b => !b.vervallen && b.planning_apds);
+  const withoutDate = boringen.filter(b => !b.vervallen && !b.planning_apds);
+
+  // Bepaal tijdsvenster
+  const dates = withDate.map(b => new Date(b.planning_apds!).getTime());
+  if (dates.length === 0) {
+    return (
+      <div className="empty-state">
+        <strong>Geen planningsdatums beschikbaar</strong>
+        Voeg planning APD&apos;s datums toe aan de boringen.
+      </div>
+    );
+  }
+
+  const minMs = Math.min(...dates, today.getTime() - 7 * 86400000);
+  const maxMs = Math.max(...dates) + 14 * 86400000;
+  const spanMs = maxMs - minMs;
+
+  // Schatting duur per boring (o.b.v. lengte)
+  function getDurationDays(b: Boring): number {
+    const l = b.lengte_m ?? 0;
+    if (l > 300) return 42;
+    if (l > 150) return 28;
+    if (l > 50)  return 21;
+    return 14;
+  }
+
+  // Maandmarkeringen
+  const months: { label: string; pct: number }[] = [];
+  const d = new Date(minMs);
+  d.setDate(1);
+  while (d.getTime() <= maxMs) {
+    const pct = ((d.getTime() - minMs) / spanMs) * 100;
+    months.push({
+      label: d.toLocaleDateString('nl-NL', { month: 'short', year: '2-digit' }),
+      pct,
+    });
+    d.setMonth(d.getMonth() + 1);
+  }
+
+  // Vandaag-lijn
+  const todayPct = ((today.getTime() - minMs) / spanMs) * 100;
+
+  // Groepeer op werkpakket
+  const wpMap = new Map<string, Boring[]>();
+  for (const b of withDate) {
+    const wp = b.werkpakket_nr ?? '—';
+    if (!wpMap.has(wp)) wpMap.set(wp, []);
+    wpMap.get(wp)!.push(b);
+  }
+  const groups = Array.from(wpMap.entries()).sort(([a], [b]) => a.localeCompare(b));
+
+  const ROW_H = 28;
+  const LABEL_W = 90;
+
+  return (
+    <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 'calc(100vh - 320px)' }}>
+      <div style={{ minWidth: 900 }}>
+
+        {/* Maand-header */}
+        <div style={{ display: 'flex', marginLeft: LABEL_W, marginBottom: 4, position: 'sticky', top: 0, background: 'var(--surface2)', zIndex: 3 }}>
+          <div style={{ position: 'relative', flex: 1, height: 24, borderBottom: '0.5px solid var(--border)' }}>
+            {months.map((m, i) => (
+              <div key={i} style={{ position: 'absolute', left: `${m.pct}%`, transform: 'translateX(-50%)',
+                fontSize: 9, fontWeight: 600, color: 'var(--text-4)', textTransform: 'uppercase', letterSpacing: '0.06em',
+                whiteSpace: 'nowrap', paddingBottom: 4 }}>
+                {m.label}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Groepen */}
+        {groups.map(([wp, bors]) => (
+          <div key={wp}>
+            {/* WP label */}
+            <div style={{ display: 'flex', alignItems: 'center', height: 22,
+              background: 'var(--surface3)', borderBottom: '0.5px solid var(--border)' }}>
+              <div style={{ width: LABEL_W, fontSize: 10, fontWeight: 700, textTransform: 'uppercase',
+                letterSpacing: '0.06em', color: 'var(--text-3)', paddingLeft: 8, flexShrink: 0 }}>
+                {wp}
+              </div>
+              <div style={{ flex: 1, position: 'relative', height: '100%' }}>
+                {/* Rasterlijnen */}
+                {months.map((m, i) => (
+                  <div key={i} style={{ position: 'absolute', left: `${m.pct}%`, top: 0, bottom: 0,
+                    width: '0.5px', background: 'var(--border)' }} />
+                ))}
+              </div>
+            </div>
+
+            {/* Boring rijen */}
+            {bors.sort((a, b) => a.boring_nr.localeCompare(b.boring_nr)).map(b => {
+              const endMs  = new Date(b.planning_apds!).getTime();
+              const durMs  = getDurationDays(b) * 86400000;
+              const startMs = endMs - durMs;
+              const startPct = Math.max(0, ((startMs - minMs) / spanMs) * 100);
+              const endPct   = Math.min(100, ((endMs - minMs) / spanMs) * 100);
+              const widthPct = Math.max(0.5, endPct - startPct);
+              const c = SC[b.status_ontwerp ?? ''] ?? SC['Niet gestart'];
+              const pct = b.hdd_tek_pct != null ? Math.round(b.hdd_tek_pct * 100) : 0;
+              const isOverdue = endMs < today.getTime() && pct < 100;
+
+              return (
+                <div key={b.id} style={{ display: 'flex', alignItems: 'center', height: ROW_H,
+                  borderBottom: '0.5px solid var(--border)', opacity: b.vervallen ? 0.35 : 1 }}>
+
+                  {/* Label */}
+                  <div style={{ width: LABEL_W, flexShrink: 0, paddingLeft: 8, paddingRight: 4 }}>
+                    <div style={{ fontSize: 10, fontWeight: 600, color: isOverdue ? '#D70015' : 'var(--text)',
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {b.boring_nr}
+                      {isOverdue && <span style={{ marginLeft: 3 }}>⚠</span>}
+                    </div>
+                    <div style={{ fontSize: 9, color: 'var(--text-4)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {b.aannemer ?? ''}
+                    </div>
+                  </div>
+
+                  {/* Tijdlijn */}
+                  <div style={{ flex: 1, position: 'relative', height: '100%' }}>
+                    {/* Rasterlijnen */}
+                    {months.map((m, i) => (
+                      <div key={i} style={{ position: 'absolute', left: `${m.pct}%`, top: 0, bottom: 0,
+                        width: '0.5px', background: 'var(--border)', opacity: 0.5 }} />
+                    ))}
+
+                    {/* Vandaag-lijn */}
+                    {todayPct >= 0 && todayPct <= 100 && (
+                      <div style={{ position: 'absolute', left: `${todayPct}%`, top: 0, bottom: 0,
+                        width: 1.5, background: '#3D6B9E', opacity: 0.7, zIndex: 2 }} />
+                    )}
+
+                    {/* Boring balk */}
+                    <div style={{
+                      position: 'absolute',
+                      left: `${startPct}%`,
+                      width: `${widthPct}%`,
+                      top: '20%', height: '60%',
+                      borderRadius: 4,
+                      background: c.bg,
+                      overflow: 'hidden',
+                      border: isOverdue ? '1.5px solid #D70015' : `0.5px solid ${c.bg}`,
+                      display: 'flex', alignItems: 'center',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                      zIndex: 1,
+                    }}>
+                      {/* Voortgang fill */}
+                      {pct > 0 && pct < 100 && (
+                        <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0,
+                          width: `${pct}%`, background: 'rgba(0,0,0,0.15)' }} />
+                      )}
+                      {/* Label */}
+                      {widthPct > 4 && (
+                        <span style={{ fontSize: 9, fontWeight: 600, color: c.fg, paddingLeft: 5,
+                          whiteSpace: 'nowrap', overflow: 'hidden', position: 'relative', zIndex: 1 }}>
+                          {pct}%
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Deadline marker */}
+                    <div style={{
+                      position: 'absolute',
+                      left: `calc(${endPct}% - 3px)`,
+                      top: '15%', height: '70%',
+                      width: 6, borderRadius: 2,
+                      background: isOverdue ? '#D70015' : '#1E2B3C',
+                      zIndex: 3,
+                    }} title={`Deadline: ${new Date(b.planning_apds!).toLocaleDateString('nl-NL')}`} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ))}
+
+        {/* Boringen zonder datum */}
+        {withoutDate.length > 0 && (
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', height: 22,
+              background: 'var(--surface3)', borderBottom: '0.5px solid var(--border)' }}>
+              <div style={{ width: LABEL_W, fontSize: 10, fontWeight: 700, textTransform: 'uppercase',
+                letterSpacing: '0.06em', color: 'var(--text-4)', paddingLeft: 8 }}>Geen datum</div>
+              <div style={{ flex: 1 }} />
+            </div>
+            {withoutDate.map(b => (
+              <div key={b.id} style={{ display: 'flex', alignItems: 'center', height: ROW_H,
+                borderBottom: '0.5px solid var(--border)', opacity: 0.5 }}>
+                <div style={{ width: LABEL_W, paddingLeft: 8 }}>
+                  <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-3)' }}>{b.boring_nr}</div>
+                </div>
+                <div style={{ fontSize: 10, color: 'var(--text-4)', paddingLeft: 8 }}>Nog geen planningsdatum</div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Legenda */}
+        <div style={{ display: 'flex', gap: 16, padding: '0.875rem 0', flexWrap: 'wrap',
+          borderTop: '0.5px solid var(--border)', marginTop: 8 }}>
+          {Object.entries(SC).filter(([k]) => k !== 'Vervallen').map(([label, c]) => (
+            <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <div style={{ width: 12, height: 10, borderRadius: 2, background: c.bg }} />
+              <span style={{ fontSize: 10, color: 'var(--text-3)' }}>{label}</span>
+            </div>
+          ))}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <div style={{ width: 2, height: 12, background: '#3D6B9E', borderRadius: 1 }} />
+            <span style={{ fontSize: 10, color: 'var(--text-3)' }}>Vandaag</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <div style={{ width: 6, height: 10, background: '#1E2B3C', borderRadius: 1 }} />
+            <span style={{ fontSize: 10, color: 'var(--text-3)' }}>Deadline</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Hoofd-pagina ────────────────────────────────────────────────────────────── */
 export default function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const router = useRouter();
-  const toast = useToast();
+  const router  = useRouter();
+  const toast   = useToast();
 
-  const [project, setProject]   = useState<Werkpakket | null>(null);
+  const [project,  setProject]  = useState<Werkpakket | null>(null);
   const [boringen, setBoringen] = useState<Boring[]>([]);
-  const [loading, setLoading]   = useState(true);
+  const [loading,  setLoading]  = useState(true);
+  const [activeTab, setActiveTab] = useState<'overzicht' | 'planning'>('overzicht');
+
   const [filterVervallen, setFilterVervallen] = useState(false);
-  const [filterStatus, setFilterStatus]       = useState('');
-  const [filterAannemer, setFilterAannemer]   = useState('');
-  const [filterWP, setFilterWP]               = useState('');
-  const [search, setSearch]                   = useState('');
-  const [sortCol, setSortCol]                 = useState<keyof Boring | null>(null);
-  const [sortDir, setSortDir]                 = useState(1);
-  const [selectedBoring, setSelectedBoring]   = useState<Boring | null>(null);
+  const [filterStatus,    setFilterStatus]    = useState('');
+  const [filterAannemer,  setFilterAannemer]  = useState('');
+  const [filterWP,        setFilterWP]        = useState('');
+  const [search,          setSearch]          = useState('');
+  const [sortCol,  setSortCol]  = useState<keyof Boring | null>(null);
+  const [sortDir,  setSortDir]  = useState(1);
+  const [selectedBoring, setSelectedBoring] = useState<Boring | null>(null);
 
   const rowIdx = parseInt(id);
 
@@ -101,32 +330,29 @@ export default function ProjectDetailPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  /* KPI's */
   const kpi = useMemo(() => {
-    const active = boringen.filter(b => !b.vervallen);
+    const a = boringen.filter(b => !b.vervallen);
     return {
-      totaal:       active.length,
-      vrijgegeven:  active.filter(b => b.status_ontwerp === 'Vrijgegeven').length,
-      goedgekeurd:  active.filter(b => b.status_ontwerp === 'Goedgekeurd').length,
-      ter_controle: active.filter(b => b.status_ontwerp === 'Ter controle').length,
-      gestart:      active.filter(b => b.status_ontwerp === 'Gestart').length,
-      issue:        active.filter(b => ['Issue','Vertraagd'].includes(b.status_ontwerp??'')).length,
-      niet_gestart: active.filter(b => b.status_ontwerp === 'Niet gestart' || !b.status_ontwerp).length,
+      totaal:       a.length,
+      vrijgegeven:  a.filter(b => b.status_ontwerp === 'Vrijgegeven').length,
+      goedgekeurd:  a.filter(b => b.status_ontwerp === 'Goedgekeurd').length,
+      ter_controle: a.filter(b => b.status_ontwerp === 'Ter controle').length,
+      gestart:      a.filter(b => b.status_ontwerp === 'Gestart').length,
+      issue:        a.filter(b => ['Issue','Vertraagd'].includes(b.status_ontwerp??'')).length,
+      niet_gestart: a.filter(b => !b.status_ontwerp || b.status_ontwerp === 'Niet gestart').length,
       vervallen:    boringen.filter(b => b.vervallen).length,
-      totaal_m:     active.reduce((s, b) => s + (b.lengte_m ?? 0), 0),
+      totaal_m:     a.reduce((s, b) => s + (b.lengte_m ?? 0), 0),
     };
   }, [boringen]);
 
-  /* Unieke filterwaarden */
   const werkpakketten = useMemo(() => Array.from(new Set(boringen.map(b => b.werkpakket_nr).filter(Boolean) as string[])).sort(), [boringen]);
   const aannemers     = useMemo(() => Array.from(new Set(boringen.map(b => b.aannemer).filter(Boolean) as string[])).sort(), [boringen]);
   const statussen     = useMemo(() => Array.from(new Set(boringen.map(b => b.status_ontwerp).filter(Boolean) as string[])).sort(), [boringen]);
 
-  /* Gefilterde rijen */
   const rows = useMemo(() => {
     let r = boringen.filter(b => {
       if (!filterVervallen && b.vervallen) return false;
-      if (filterVervallen && !b.vervallen) return false;
+      if (filterVervallen  && !b.vervallen) return false;
       if (filterStatus   && b.status_ontwerp !== filterStatus) return false;
       if (filterAannemer && b.aannemer !== filterAannemer) return false;
       if (filterWP       && b.werkpakket_nr !== filterWP) return false;
@@ -152,55 +378,49 @@ export default function ProjectDetailPage() {
   if (loading) return <div className="page-content"><div className="loading-bar" /></div>;
   if (!project) return <div className="page-content"><div className="empty-state"><strong>Project niet gevonden</strong></div></div>;
 
-  const cd  = project.cel_data as Record<string, string>;
+  const cd   = project.cel_data as Record<string, string>;
   const naam = cd['2'] ?? project.projectnaam;
 
   return (
-    <div className="page-content">
+    <div className="page-content" style={{ paddingRight: selectedBoring ? 356 : undefined, transition: 'padding-right 0.2s' }}>
 
-      {/* ── Header ──────────────────────────────────────────────────────────── */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: '1.25rem' }}>
-        <button className="btn" style={{ fontSize: 12, flexShrink: 0, marginTop: 2 }}
-          onClick={() => router.push('/projecten')}>← Terug</button>
-
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: '1rem' }}>
+        <button className="btn" style={{ fontSize: 12, flexShrink: 0, marginTop: 2 }} onClick={() => router.push('/projecten')}>← Terug</button>
         <div style={{ flex: 1 }}>
-          <h1 style={{ fontSize: 18, fontWeight: 600, letterSpacing: '-0.3px', color: 'var(--text)', margin: 0 }}>
-            {naam}
-          </h1>
+          <h1 style={{ fontSize: 18, fontWeight: 600, letterSpacing: '-0.3px', margin: 0 }}>{naam}</h1>
           <div style={{ display: 'flex', gap: 16, marginTop: 6, flexWrap: 'wrap' }}>
-            {cd['0'] && <Meta label="Code"         value={cd['0']} />}
-            {cd['1'] && <Meta label="Casenummer"   value={cd['1']} />}
+            {cd['0'] && <Meta label="Code"          value={cd['0']} />}
+            {cd['1'] && <Meta label="Casenummer"    value={cd['1']} />}
             {cd['8'] && <Meta label="Projectleider" value={cd['8']} />}
-            {cd['fase'] && <Meta label="Fase"      value={cd['fase']} chip />}
+            {cd['fase'] && <Meta label="Fase"       value={cd['fase']} chip />}
           </div>
         </div>
       </div>
 
-      {/* ── KPI balk ────────────────────────────────────────────────────────── */}
-      <div className="stats-bar" style={{ marginBottom: '1.25rem' }}>
-        <KPICard num={kpi.totaal}       label="Boringen"     />
-        <KPICard num={kpi.vrijgegeven}  label="Vrijgegeven"  color="#1A7F3C" />
-        <KPICard num={kpi.goedgekeurd}  label="Goedgekeurd"  color="#8BC34A" />
-        <KPICard num={kpi.ter_controle} label="Ter controle" color="#D97706" />
-        <KPICard num={kpi.gestart}      label="Gestart"      color="#F5A623" />
+      {/* KPI balk */}
+      <div className="stats-bar" style={{ marginBottom: '1rem' }}>
+        <KPICard num={kpi.totaal}       label="Boringen" />
+        <KPICard num={kpi.vrijgegeven}  label="Vrijgegeven"   color="#1A7F3C" />
+        <KPICard num={kpi.goedgekeurd}  label="Goedgekeurd"   color="#8BC34A" />
+        <KPICard num={kpi.ter_controle} label="Ter controle"  color="#D97706" />
+        <KPICard num={kpi.gestart}      label="Gestart"       color="#F5A623" />
         <KPICard num={kpi.issue}        label="Issue / Vertr." color="#D70015" />
-        <KPICard num={kpi.niet_gestart} label="Niet gestart" color="#9CA3AF" />
-        <KPICard num={kpi.vervallen}    label="Vervallen"    color="#D1D5DB" />
-        <div className="stat-card" style={{ minWidth: 100 }}>
+        <KPICard num={kpi.niet_gestart} label="Niet gestart"  color="#9CA3AF" />
+        <KPICard num={kpi.vervallen}    label="Vervallen"     color="#D1D5DB" />
+        <div className="stat-card">
           <span className="stat-num" style={{ fontSize: 16 }}>{Math.round(kpi.totaal_m).toLocaleString('nl-NL')} m</span>
           <span className="stat-label">Totaal lengte</span>
         </div>
       </div>
 
-      {/* ── Voortgangsbalk totaal ────────────────────────────────────────────── */}
+      {/* Voortgangsbalk */}
       {kpi.totaal > 0 && (
         <div style={{ background: 'var(--surface)', border: '0.5px solid var(--border)', borderRadius: 'var(--r-lg)',
           padding: '0.875rem 1.125rem', marginBottom: '0.875rem', boxShadow: 'var(--sh-sm)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
             <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-2)' }}>Totale voortgang ontwerp</span>
-            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>
-              {kpi.vrijgegeven + kpi.goedgekeurd} / {kpi.totaal} vrijgegeven of goedgekeurd
-            </span>
+            <span style={{ fontSize: 12, fontWeight: 600 }}>{kpi.vrijgegeven + kpi.goedgekeurd} / {kpi.totaal} vrijgegeven of goedgekeurd</span>
           </div>
           <div style={{ display: 'flex', height: 10, borderRadius: 5, overflow: 'hidden', gap: 1 }}>
             {[
@@ -217,147 +437,153 @@ export default function ProjectDetailPage() {
         </div>
       )}
 
-      {/* ── Controls ────────────────────────────────────────────────────────── */}
-      <div className="controls-bar">
-        <div className="search-wrap">
-          <span className="search-icon"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="5" stroke="currentColor" strokeWidth="1.5"/><path d="M11 11l3 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg></span>
-          <input className="search-input" placeholder="Zoeken..." value={search} onChange={e => setSearch(e.target.value)} />
-        </div>
-
-        {werkpakketten.length > 1 && (
-          <select className="field-input" style={{ width: 'auto', padding: '4px 28px 4px 10px' }}
-            value={filterWP} onChange={e => setFilterWP(e.target.value)}>
-            <option value="">Alle werkpakketten</option>
-            {werkpakketten.map(wp => <option key={wp}>{wp}</option>)}
-          </select>
-        )}
-
-        <select className="field-input" style={{ width: 'auto', padding: '4px 28px 4px 10px' }}
-          value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
-          <option value="">Alle statussen</option>
-          {statussen.map(s => <option key={s}>{s}</option>)}
-        </select>
-
-        {aannemers.length > 1 && (
-          <select className="field-input" style={{ width: 'auto', padding: '4px 28px 4px 10px' }}
-            value={filterAannemer} onChange={e => setFilterAannemer(e.target.value)}>
-            <option value="">Alle aannemers</option>
-            {aannemers.map(a => <option key={a}>{a}</option>)}
-          </select>
-        )}
-
-        <button className={`tab${filterVervallen ? ' active' : ''}`}
-          onClick={() => setFilterVervallen(v => !v)} style={{ fontSize: 11 }}>
-          {filterVervallen ? '✕ Vervallen' : 'Toon vervallen'}
+      {/* Tab switcher */}
+      <div className="controls-bar" style={{ marginBottom: '0.75rem' }}>
+        <button className={`tab${activeTab === 'overzicht' ? ' active' : ''}`} onClick={() => setActiveTab('overzicht')}>
+          ⊞ Overzicht
         </button>
-        <div style={{ flex: 1 }} />
-        <span style={{ fontSize: 11, color: 'var(--text-3)' }}>{rows.length} boringen</span>
+        <button className={`tab${activeTab === 'planning' ? ' active' : ''}`} onClick={() => setActiveTab('planning')}>
+          📅 Gantt Planning
+        </button>
+
+        {activeTab === 'overzicht' && <>
+          <div style={{ width: '0.5px', height: 20, background: 'var(--border)', margin: '0 4px' }} />
+          <div className="search-wrap">
+            <span className="search-icon"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="5" stroke="currentColor" strokeWidth="1.5"/><path d="M11 11l3 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg></span>
+            <input className="search-input" placeholder="Zoeken..." value={search} onChange={e => setSearch(e.target.value)} />
+          </div>
+          {werkpakketten.length > 1 && (
+            <select className="field-input" style={{ width: 'auto', padding: '4px 28px 4px 10px' }} value={filterWP} onChange={e => setFilterWP(e.target.value)}>
+              <option value="">Alle werkpakketten</option>
+              {werkpakketten.map(wp => <option key={wp}>{wp}</option>)}
+            </select>
+          )}
+          <select className="field-input" style={{ width: 'auto', padding: '4px 28px 4px 10px' }} value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
+            <option value="">Alle statussen</option>
+            {statussen.map(s => <option key={s}>{s}</option>)}
+          </select>
+          {aannemers.length > 1 && (
+            <select className="field-input" style={{ width: 'auto', padding: '4px 28px 4px 10px' }} value={filterAannemer} onChange={e => setFilterAannemer(e.target.value)}>
+              <option value="">Alle aannemers</option>
+              {aannemers.map(a => <option key={a}>{a}</option>)}
+            </select>
+          )}
+          <button className={`tab${filterVervallen ? ' active' : ''}`} onClick={() => setFilterVervallen(v => !v)} style={{ fontSize: 11 }}>
+            {filterVervallen ? '✕ Vervallen' : 'Toon vervallen'}
+          </button>
+          <div style={{ flex: 1 }} />
+          <span style={{ fontSize: 11, color: 'var(--text-3)' }}>{rows.length} boringen</span>
+        </>}
       </div>
 
-      {/* ── Tabel ───────────────────────────────────────────────────────────── */}
-      <div className="table-wrap">
-        <div className="tbl-scroll">
-          <table>
-            <thead>
-              <tr>
-                <th className="sortable" onClick={() => sort('boring_nr')}>Boor nr{srt('boring_nr')}</th>
-                <th className="sortable" onClick={() => sort('werkpakket_nr')}>WP{srt('werkpakket_nr')}</th>
-                <th className="sortable" onClick={() => sort('locatie')}>Locatie{srt('locatie')}</th>
-                <th className="sortable" onClick={() => sort('lengte_m')}>L (m){srt('lengte_m')}</th>
-                <th className="sortable" onClick={() => sort('type_boring')}>Type{srt('type_boring')}</th>
-                <th className="sortable" onClick={() => sort('klasse')}>Klasse{srt('klasse')}</th>
-                <th className="sortable" onClick={() => sort('aannemer')}>Aannemer{srt('aannemer')}</th>
-                <th className="sortable" onClick={() => sort('apd_verantw')}>APD{srt('apd_verantw')}</th>
-                <th className="sortable" onClick={() => sort('status_ontwerp')}>HDD Ontwerp{srt('status_ontwerp')}</th>
-                <th>Tek %</th>
-                <th className="sortable" onClick={() => sort('status_werkterrein')}>Werkterrein{srt('status_werkterrein')}</th>
-                <th className="sortable" onClick={() => sort('status_berekening')}>Berekening{srt('status_berekening')}</th>
-                <th>Bundel</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.length === 0 ? (
-                <tr><td colSpan={13}><div className="empty-state"><strong>Geen boringen</strong></div></td></tr>
-              ) : rows.map(b => (
-                <tr key={b.id} onClick={() => setSelectedBoring(b)}
-                  style={{ cursor: 'pointer', opacity: b.vervallen ? 0.4 : 1,
-                    background: selectedBoring?.id === b.id ? 'var(--accent-2)' : undefined }}>
-                  <td style={{ fontWeight: 700, color: 'var(--text)' }}>
-                    {b.boring_nr}
-                    {b.prioritering && <span style={{ marginLeft: 5, fontSize: 9, fontWeight: 700,
-                      padding: '1px 5px', borderRadius: 4, background: '#FEF3C7', color: '#92400E' }}>⚑</span>}
-                  </td>
-                  <td style={{ color: 'var(--text-3)', fontSize: 11 }}>{b.werkpakket_nr || '—'}</td>
-                  <td style={{ maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', color: 'var(--text-2)' }}>{b.locatie || '—'}</td>
-                  <td style={{ fontVariantNumeric: 'tabular-nums' }}>{b.lengte_m ?? '—'}</td>
-                  <td style={{ fontSize: 11 }}>{b.type_boring || '—'}</td>
-                  <td>{b.klasse ? <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 4, background: 'var(--surface3)', border: '0.5px solid var(--border)' }}>{b.klasse}</span> : '—'}</td>
-                  <td style={{ fontSize: 11, color: 'var(--text-2)' }}>{b.aannemer || '—'}</td>
-                  <td style={{ fontSize: 11, color: 'var(--text-3)' }}>{b.apd_verantw || '—'}</td>
-                  <td><Pill status={b.status_ontwerp} /></td>
-                  <td><TekBar pct={b.hdd_tek_pct} /></td>
-                  <td><Pill status={b.status_werkterrein} /></td>
-                  <td><Pill status={b.status_berekening} /></td>
-                  <td style={{ fontSize: 11, color: 'var(--text-3)', maxWidth: 110, overflow: 'hidden', textOverflow: 'ellipsis' }}>{b.bundel_configuratie || '—'}</td>
+      {/* ── Overzicht tabel ──────────────────────────────────────────────────── */}
+      {activeTab === 'overzicht' && (
+        <div className="table-wrap">
+          <div className="tbl-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th className="sortable" onClick={() => sort('boring_nr')}>Boor nr{srt('boring_nr')}</th>
+                  <th className="sortable" onClick={() => sort('werkpakket_nr')}>WP{srt('werkpakket_nr')}</th>
+                  <th className="sortable" onClick={() => sort('locatie')}>Locatie{srt('locatie')}</th>
+                  <th className="sortable" onClick={() => sort('lengte_m')}>L (m){srt('lengte_m')}</th>
+                  <th className="sortable" onClick={() => sort('type_boring')}>Type{srt('type_boring')}</th>
+                  <th className="sortable" onClick={() => sort('klasse')}>Klasse{srt('klasse')}</th>
+                  <th className="sortable" onClick={() => sort('aannemer')}>Aannemer{srt('aannemer')}</th>
+                  <th className="sortable" onClick={() => sort('apd_verantw')}>APD{srt('apd_verantw')}</th>
+                  <th className="sortable" onClick={() => sort('status_ontwerp')}>HDD Ontwerp{srt('status_ontwerp')}</th>
+                  <th>Tek %</th>
+                  <th className="sortable" onClick={() => sort('status_werkterrein')}>Werkterrein{srt('status_werkterrein')}</th>
+                  <th className="sortable" onClick={() => sort('status_berekening')}>Berekening{srt('status_berekening')}</th>
+                  <th>Bundel</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {rows.length === 0 ? (
+                  <tr><td colSpan={13}><div className="empty-state"><strong>Geen boringen</strong></div></td></tr>
+                ) : rows.map(b => {
+                  const c = SC[b.status_ontwerp ?? ''];
+                  return (
+                    <tr key={b.id} onClick={() => setSelectedBoring(selectedBoring?.id === b.id ? null : b)}
+                      style={{ cursor: 'pointer', opacity: b.vervallen ? 0.4 : 1,
+                        background: selectedBoring?.id === b.id ? 'var(--accent-2)' : undefined }}>
+                      <td style={{ fontWeight: 700 }}>
+                        {b.boring_nr}
+                        {b.prioritering && <span style={{ marginLeft: 5, fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 4, background: '#FEF3C7', color: '#92400E' }}>⚑</span>}
+                      </td>
+                      <td style={{ color: 'var(--text-3)', fontSize: 11 }}>{b.werkpakket_nr || '—'}</td>
+                      <td style={{ maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', color: 'var(--text-2)' }}>{b.locatie || '—'}</td>
+                      <td style={{ fontVariantNumeric: 'tabular-nums' }}>{b.lengte_m ?? '—'}</td>
+                      <td style={{ fontSize: 11 }}>{b.type_boring || '—'}</td>
+                      <td>{b.klasse ? <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 4, background: 'var(--surface3)', border: '0.5px solid var(--border)' }}>{b.klasse}</span> : '—'}</td>
+                      <td style={{ fontSize: 11, color: 'var(--text-2)' }}>{b.aannemer || '—'}</td>
+                      <td style={{ fontSize: 11, color: 'var(--text-3)' }}>{b.apd_verantw || '—'}</td>
+                      <td>{c ? <span style={{ fontSize: 10, fontWeight: 600, padding: '3px 9px', borderRadius: 20, background: c.bg, color: c.fg, whiteSpace: 'nowrap' }}>{b.status_ontwerp}</span> : <span style={{ color: 'var(--text-4)', fontSize: 11 }}>—</span>}</td>
+                      <td><TekBar pct={b.hdd_tek_pct} /></td>
+                      <td><Pill status={b.status_werkterrein} /></td>
+                      <td><Pill status={b.status_berekening} /></td>
+                      <td style={{ fontSize: 11, color: 'var(--text-3)', maxWidth: 110, overflow: 'hidden', textOverflow: 'ellipsis' }}>{b.bundel_configuratie || '—'}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* ── Detail paneel (slide-in rechts) ─────────────────────────────────── */}
-      {selectedBoring && (
-        <div style={{
-          position: 'fixed', top: 'var(--hdr-h)', right: 0, bottom: 0, width: 340,
+      {/* ── Gantt planning ───────────────────────────────────────────────────── */}
+      {activeTab === 'planning' && (
+        <div style={{ background: 'var(--surface)', border: '0.5px solid var(--border)', borderRadius: 'var(--r-lg)',
+          padding: '1rem 1.125rem', boxShadow: 'var(--sh-sm)' }}>
+          <GanttChart boringen={boringen} />
+        </div>
+      )}
+
+      {/* ── Detail paneel ────────────────────────────────────────────────────── */}
+      {selectedBoring && activeTab === 'overzicht' && (
+        <div style={{ position: 'fixed', top: 'var(--hdr-h)', right: 0, bottom: 0, width: 340,
           background: 'var(--surface)', borderLeft: '0.5px solid var(--border)',
-          boxShadow: '-8px 0 32px rgba(0,0,0,0.08)', zIndex: 80,
-          overflowY: 'auto', padding: '1.25rem',
-          animation: 'slideInRight 0.2s cubic-bezier(0.34,1.1,0.64,1)',
-        }}>
+          boxShadow: '-8px 0 32px rgba(0,0,0,0.08)', zIndex: 80, overflowY: 'auto', padding: '1.25rem',
+          animation: 'slideInRight 0.2s cubic-bezier(0.34,1.1,0.64,1)' }}>
           <style>{`@keyframes slideInRight { from { transform: translateX(40px); opacity:0 } to { transform: none; opacity:1 } }`}</style>
 
           <div style={{ display: 'flex', alignItems: 'center', marginBottom: '1.25rem' }}>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)' }}>{selectedBoring.boring_nr}</div>
+              <div style={{ fontSize: 15, fontWeight: 700 }}>{selectedBoring.boring_nr}</div>
               <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 2 }}>{naam}</div>
             </div>
-            <button className="btn" style={{ padding: '3px 8px', fontSize: 13 }} onClick={() => setSelectedBoring(null)}>✕</button>
+            <button className="btn" style={{ padding: '3px 8px' }} onClick={() => setSelectedBoring(null)}>✕</button>
           </div>
 
-          <DetailSection title="HDD Gegevens">
-            <DRow label="Werkpakket"  value={selectedBoring.werkpakket_nr} />
-            <DRow label="Locatie"     value={selectedBoring.locatie} />
-            <DRow label="Lengte"      value={selectedBoring.lengte_m != null ? `${selectedBoring.lengte_m} m` : undefined} />
-            <DRow label="Type"        value={selectedBoring.type_boring} />
-            <DRow label="Klasse"      value={selectedBoring.klasse} />
-            <DRow label="Aannemer"    value={selectedBoring.aannemer} />
-            <DRow label="APD"         value={selectedBoring.apd_verantw} />
-            {selectedBoring.bundel_configuratie && <DRow label="Bundel" value={selectedBoring.bundel_configuratie} />}
-          </DetailSection>
-
-          <DetailSection title="Planning">
-            <DRow label="Planning APD's" value={selectedBoring.planning_apds
-              ? new Date(selectedBoring.planning_apds).toLocaleDateString('nl-NL')
-              : undefined} />
-          </DetailSection>
-
-          <DetailSection title="Status tekenwerk">
+          <DS title="HDD Gegevens">
+            <DR label="Werkpakket"  value={selectedBoring.werkpakket_nr} />
+            <DR label="Locatie"     value={selectedBoring.locatie} />
+            <DR label="Lengte"      value={selectedBoring.lengte_m != null ? `${selectedBoring.lengte_m} m` : undefined} />
+            <DR label="Type"        value={selectedBoring.type_boring} />
+            <DR label="Klasse"      value={selectedBoring.klasse} />
+            <DR label="Aannemer"    value={selectedBoring.aannemer} />
+            <DR label="APD"         value={selectedBoring.apd_verantw} />
+            {selectedBoring.bundel_configuratie && <DR label="Bundel" value={selectedBoring.bundel_configuratie} />}
+          </DS>
+          <DS title="Planning">
+            <DR label="Planning APD's" value={selectedBoring.planning_apds ? new Date(selectedBoring.planning_apds).toLocaleDateString('nl-NL') : undefined} />
+          </DS>
+          <DS title="Status tekenwerk">
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <StatusDetailRow label="HDD Ontwerp"  status={selectedBoring.status_ontwerp} pct={selectedBoring.hdd_tek_pct} />
-              <StatusDetailRow label="Werkterrein"  status={selectedBoring.status_werkterrein} />
-              <StatusDetailRow label="Berekening"   status={selectedBoring.status_berekening} />
+              <SDR label="HDD Ontwerp"  status={selectedBoring.status_ontwerp} pct={selectedBoring.hdd_tek_pct} />
+              <SDR label="Werkterrein"  status={selectedBoring.status_werkterrein} />
+              <SDR label="Berekening"   status={selectedBoring.status_berekening} />
             </div>
-          </DetailSection>
-
+          </DS>
           {selectedBoring.opmerkingen && (
-            <DetailSection title="Opmerkingen">
+            <DS title="Opmerkingen">
               <p style={{ fontSize: 11, color: 'var(--text-2)', lineHeight: 1.6, margin: 0,
                 background: '#FFFBEB', border: '0.5px solid #FDE68A', borderRadius: 6,
                 padding: '0.625rem 0.75rem', whiteSpace: 'pre-wrap' }}>
                 {selectedBoring.opmerkingen}
               </p>
-            </DetailSection>
+            </DS>
           )}
         </div>
       )}
@@ -365,7 +591,7 @@ export default function ProjectDetailPage() {
   );
 }
 
-/* ── Hulpcomponenten ─────────────────────────────────────────────────────────── */
+/* ── Kleine hulpcomponenten ──────────────────────────────────────────────────── */
 function Meta({ label, value, chip }: { label: string; value: string; chip?: boolean }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
@@ -373,13 +599,10 @@ function Meta({ label, value, chip }: { label: string; value: string; chip?: boo
       {chip ? (
         <span style={{ fontSize: 11, fontWeight: 600, padding: '1px 8px', borderRadius: 4,
           background: 'var(--accent-2)', color: 'var(--accent)', border: '0.5px solid var(--accent)' }}>{value}</span>
-      ) : (
-        <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-2)' }}>{value}</span>
-      )}
+      ) : <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-2)' }}>{value}</span>}
     </div>
   );
 }
-
 function KPICard({ num, label, color }: { num: number; label: string; color?: string }) {
   return (
     <div className="stat-card">
@@ -388,30 +611,25 @@ function KPICard({ num, label, color }: { num: number; label: string; color?: st
     </div>
   );
 }
-
-function DetailSection({ title, children }: { title: string; children: React.ReactNode }) {
+function DS({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div style={{ marginBottom: '1rem' }}>
       <div style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em',
-        color: 'var(--text-4)', marginBottom: 8, paddingBottom: 6, borderBottom: '0.5px solid var(--border)' }}>
-        {title}
-      </div>
+        color: 'var(--text-4)', marginBottom: 8, paddingBottom: 6, borderBottom: '0.5px solid var(--border)' }}>{title}</div>
       {children}
     </div>
   );
 }
-
-function DRow({ label, value }: { label: string; value?: string | null }) {
+function DR({ label, value }: { label: string; value?: string | null }) {
   if (!value) return null;
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr', gap: 4, marginBottom: 4, alignItems: 'start' }}>
-      <span style={{ fontSize: 11, color: 'var(--text-4)', fontWeight: 500, paddingTop: 1 }}>{label}</span>
+      <span style={{ fontSize: 11, color: 'var(--text-4)', fontWeight: 500 }}>{label}</span>
       <span style={{ fontSize: 11, color: 'var(--text)', fontWeight: 500 }}>{value}</span>
     </div>
   );
 }
-
-function StatusDetailRow({ label, status, pct }: { label: string; status?: string; pct?: number }) {
+function SDR({ label, status, pct }: { label: string; status?: string; pct?: number }) {
   return (
     <div>
       <div style={{ fontSize: 10, color: 'var(--text-4)', marginBottom: 4 }}>{label}</div>
