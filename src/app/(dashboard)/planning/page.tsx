@@ -4,7 +4,8 @@ import { useState, useMemo, useRef } from 'react';
 import { useProjects } from '@/hooks/useProjects';
 import { useToast } from '@/components/ui/ToastProvider';
 import StatusBadge from '@/components/ui/StatusBadge';
-import { FASEN, COLS, STATUS_VALUES, statusClass } from '@/lib/constants';
+import { COLS, STATUS_VALUES, statusClass } from '@/lib/constants';
+import { FASEN } from '@/lib/constants';
 import { getProjectNaam, getEngineer, getProgressPercent, wekenResterend, calcHealth } from '@/lib/utils';
 import type { StatusValue } from '@/types';
 
@@ -19,7 +20,6 @@ export default function PlanningPage() {
   const mode = 'editor';
   const toast = useToast();
 
-  const [activeFase, setActiveFase] = useState(FASEN[0].f);
   const [healthFilter, setHealthFilter] = useState<HealthFilter>('');
   const [engineerFilter, setEngineerFilter] = useState('');
   const [search, setSearch] = useState('');
@@ -27,13 +27,14 @@ export default function PlanningPage() {
   const [picker, setPicker] = useState<{ rowIdx: number; colIdx: number; x: number; y: number } | null>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
 
+  // Vaste fase — boringen voortgang
+  const currentFase = FASEN[0];
+
   const engineers = useMemo(() => {
     const s = new Set<string>();
     projects.forEach(p => { const e = getEngineer(p.cel_data); if (e) s.add(e); });
     return Array.from(s).sort();
   }, [projects]);
-
-  const currentFase = FASEN.find(f => f.f === activeFase)!;
 
   const alertCounts = useMemo(() => {
     const c = { groen: 0, oranje: 0, rood: 0 };
@@ -92,12 +93,6 @@ export default function PlanningPage() {
 
       {/* Controls */}
       <div className="controls-bar">
-        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-          {FASEN.map(f => (
-            <button key={f.f} className={`tab${activeFase === f.f ? ' active' : ''}`} onClick={() => setActiveFase(f.f)}>{f.l}</button>
-          ))}
-        </div>
-        <div style={{ flex: 1 }} />
         <select className="field-input" style={{ width: 'auto', minWidth: 140, padding: '4px 28px 4px 10px' }} value={engineerFilter} onChange={e => setEngineerFilter(e.target.value)}>
           <option value="">Alle engineers</option>
           {engineers.map(e => <option key={e}>{e}</option>)}
