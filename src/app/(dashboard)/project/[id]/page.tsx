@@ -166,15 +166,16 @@ function GanttChart({ boringen }: { boringen: Boring[] }) {
 
             {/* Boring rijen */}
             {bors.sort((a, b) => a.boring_nr.localeCompare(b.boring_nr)).map(b => {
-              const endMs  = new Date(b.planning_apds!).getTime();
-              const durMs  = getDurationDays(b) * 86400000;
-              const startMs = endMs - durMs;
-              const startPct = Math.max(0, ((startMs - minMs) / spanMs) * 100);
-              const endPct   = Math.min(100, ((endMs - minMs) / spanMs) * 100);
-              const widthPct = Math.max(0.5, endPct - startPct);
-              const c = SC[b.status_ontwerp ?? ''] ?? SC['Niet gestart'];
-              const pct = b.hdd_tek_pct != null ? Math.round(b.hdd_tek_pct * 100) : 0;
-              const isOverdue = endMs < today.getTime() && pct < 100;
+              const deadlineMs = new Date(b.planning_apds!).getTime();
+              const durMs      = getDurationDays(b) * 86400000;
+              const startMs    = deadlineMs - durMs;
+              const startPct   = Math.max(0, ((startMs - minMs) / spanMs) * 100);
+              const endPct     = Math.min(100, ((deadlineMs - minMs) / spanMs) * 100);
+              const widthPct   = Math.max(0.5, endPct - startPct);
+              const c          = SC[b.status_ontwerp ?? ''] ?? SC['Niet gestart'];
+              const pct        = b.hdd_tek_pct != null ? Math.round(b.hdd_tek_pct * 100) : 0;
+              const isOverdue  = deadlineMs < today.getTime() && pct < 100;
+              const wekenRest  = Math.round((deadlineMs - today.getTime()) / (1000*60*60*24*7));
 
               return (
                 <div key={b.id} style={{ display: 'flex', alignItems: 'center', height: ROW_H,
@@ -185,10 +186,11 @@ function GanttChart({ boringen }: { boringen: Boring[] }) {
                     <div style={{ fontSize: 10, fontWeight: 600, color: isOverdue ? '#D70015' : 'var(--text)',
                       overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {b.boring_nr}
-                      {isOverdue && <span style={{ marginLeft: 3 }}>⚠</span>}
                     </div>
-                    <div style={{ fontSize: 9, color: 'var(--text-4)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {b.aannemer ?? ''}
+                    <div style={{ fontSize: 9, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      color: isOverdue ? '#D70015' : wekenRest <= 4 ? '#92400E' : 'var(--text-4)',
+                      fontWeight: isOverdue || wekenRest <= 4 ? 600 : 400 }}>
+                      {isOverdue ? `${Math.abs(wekenRest)}w te laat ⚠` : `${wekenRest}w`}
                     </div>
                   </div>
 
@@ -237,7 +239,7 @@ function GanttChart({ boringen }: { boringen: Boring[] }) {
                     {/* Deadline marker */}
                     <div style={{
                       position: 'absolute',
-                      left: `calc(${endPct}% - 3px)`,
+                      left: `calc(${endPct}% - 3px)`,   // deadline = planning_apds
                       top: '15%', height: '70%',
                       width: 6, borderRadius: 2,
                       background: isOverdue ? '#D70015' : '#1E2B3C',
@@ -495,12 +497,13 @@ export default function ProjectDetailPage() {
                   <th>Tek %</th>
                   <th className="sortable" onClick={() => sort('status_werkterrein')}>Werkterrein{srt('status_werkterrein')}</th>
                   <th className="sortable" onClick={() => sort('status_berekening')}>Berekening{srt('status_berekening')}</th>
+                  <th>Weken</th>
                   <th>Bundel</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.length === 0 ? (
-                  <tr><td colSpan={13}><div className="empty-state"><strong>Geen boringen</strong></div></td></tr>
+                  <tr><td colSpan={14}><div className="empty-state"><strong>Geen boringen</strong></div></td></tr>
                 ) : rows.map(b => {
                   const c = SC[b.status_ontwerp ?? ''];
                   return (
@@ -522,6 +525,16 @@ export default function ProjectDetailPage() {
                       <td><TekBar pct={b.hdd_tek_pct} /></td>
                       <td><Pill status={b.status_werkterrein} /></td>
                       <td><Pill status={b.status_berekening} /></td>
+                      <td>{b.planning_apds ? (() => {
+                        const wk = Math.round((new Date(b.planning_apds).getTime() - Date.now()) / (1000*60*60*24*7));
+                        const over = wk < 0; const warn = wk >= 0 && wk <= 4;
+                        return <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 20, whiteSpace: 'nowrap',
+                          background: over ? '#FEE2E2' : warn ? '#FEF3C7' : '#D1FAE5',
+                          color: over ? '#991B1B' : warn ? '#92400E' : '#065F46',
+                          border: `0.5px solid ${over ? '#FECACA' : warn ? '#FDE68A' : '#A7F3D0'}` }}>
+                          {over ? `${Math.abs(wk)}w te laat` : `${wk}w`}
+                        </span>;
+                      })() : <span style={{ color: 'var(--text-4)', fontSize: 11 }}>—</span>}</td>
                       <td style={{ fontSize: 11, color: 'var(--text-3)', maxWidth: 110, overflow: 'hidden', textOverflow: 'ellipsis' }}>{b.bundel_configuratie || '—'}</td>
                     </tr>
                   );

@@ -371,6 +371,7 @@ export default function BoringenPage() {
                 <th className="sortable" onClick={() => sort('status_werkterrein')}>Werkterrein{srt('status_werkterrein')}</th>
                 <th className="sortable" onClick={() => sort('status_berekening')}>Berekening{srt('status_berekening')}</th>
                 <th className="sortable" onClick={() => sort('planning_apds')}>Planning APD{srt('planning_apds')}</th>
+                <th className="sortable" onClick={() => sort('planning_apds')}>Weken</th>
                 <th>Bundel</th>
                 <th>Project</th>
                 <th></th>
@@ -378,7 +379,7 @@ export default function BoringenPage() {
             </thead>
             <tbody>
               {rows.length === 0 ? (
-                <tr><td colSpan={15}><div className="empty-state"><strong>Geen boringen gevonden</strong>Pas de filters aan.</div></td></tr>
+                <tr><td colSpan={16}><div className="empty-state"><strong>Geen boringen gevonden</strong>Pas de filters aan.</div></td></tr>
               ) : rows.map(d => {
                 const sc = STATUS_COLORS[d.status_ontwerp ?? ''];
                 return (
