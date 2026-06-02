@@ -100,14 +100,16 @@ function GanttChart({ boringen }: { boringen: Boring[] }) {
     return 14;
   }
 
-  // Maandmarkeringen
-  const months: { label: string; pct: number }[] = [];
+  // Maand- én jaar-markeringen
+  const months: { label: string; pct: number; isJan: boolean; year: string }[] = [];
   const d = new Date(minMs);
   d.setDate(1);
   while (d.getTime() <= maxMs) {
     const pct = ((d.getTime() - minMs) / spanMs) * 100;
     months.push({
-      label: d.toLocaleDateString('nl-NL', { month: 'short', year: '2-digit' }),
+      label: d.toLocaleDateString('nl-NL', { month: 'short' }),
+      year:  d.getFullYear().toString(),
+      isJan: d.getMonth() === 0,
       pct,
     });
     d.setMonth(d.getMonth() + 1);
@@ -132,13 +134,36 @@ function GanttChart({ boringen }: { boringen: Boring[] }) {
     <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 'calc(100vh - 320px)' }}>
       <div style={{ minWidth: 900 }}>
 
-        {/* Maand-header */}
-        <div style={{ display: 'flex', marginLeft: LABEL_W, marginBottom: 4, position: 'sticky', top: 0, background: 'var(--surface2)', zIndex: 3 }}>
-          <div style={{ position: 'relative', flex: 1, height: 24, borderBottom: '0.5px solid var(--border)' }}>
+        {/* Maand + Jaar header */}
+        <div style={{ marginLeft: LABEL_W, marginBottom: 4, position: 'sticky', top: 0, background: 'var(--surface2)', zIndex: 3 }}>
+          {/* Jaar-rij */}
+          <div style={{ position: 'relative', height: 18, borderBottom: '0.5px solid var(--border-md)' }}>
+            {months.filter(m => m.isJan).map((m, i) => (
+              <div key={i} style={{ position: 'absolute', left: `${m.pct}%`,
+                fontSize: 10, fontWeight: 700, color: 'var(--text-2)',
+                background: 'var(--surface2)', paddingRight: 6, whiteSpace: 'nowrap' }}>
+                {m.year}
+              </div>
+            ))}
+            {/* Ook eerste jaar tonen ook al is het geen januari */}
+            {months.length > 0 && !months[0].isJan && (
+              <div style={{ position: 'absolute', left: '0%',
+                fontSize: 10, fontWeight: 700, color: 'var(--text-2)', whiteSpace: 'nowrap' }}>
+                {months[0].year}
+              </div>
+            )}
+          </div>
+          {/* Maand-rij */}
+          <div style={{ position: 'relative', height: 20, borderBottom: '0.5px solid var(--border)' }}>
             {months.map((m, i) => (
-              <div key={i} style={{ position: 'absolute', left: `${m.pct}%`, transform: 'translateX(-50%)',
-                fontSize: 9, fontWeight: 600, color: 'var(--text-4)', textTransform: 'uppercase', letterSpacing: '0.06em',
-                whiteSpace: 'nowrap', paddingBottom: 4 }}>
+              <div key={i} style={{
+                position: 'absolute', left: `${m.pct}%`, transform: 'translateX(-50%)',
+                fontSize: 9, fontWeight: m.isJan ? 700 : 500,
+                color: m.isJan ? 'var(--text-2)' : 'var(--text-4)',
+                textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap',
+                borderLeft: m.isJan ? '1.5px solid var(--border-md)' : undefined,
+                paddingLeft: m.isJan ? 4 : 0,
+              }}>
                 {m.label}
               </div>
             ))}
@@ -159,7 +184,8 @@ function GanttChart({ boringen }: { boringen: Boring[] }) {
                 {/* Rasterlijnen */}
                 {months.map((m, i) => (
                   <div key={i} style={{ position: 'absolute', left: `${m.pct}%`, top: 0, bottom: 0,
-                    width: '0.5px', background: 'var(--border)' }} />
+                    width: m.isJan ? '1.5px' : '0.5px',
+                    background: m.isJan ? 'var(--border-md)' : 'var(--border)' }} />
                 ))}
               </div>
             </div>
@@ -199,7 +225,9 @@ function GanttChart({ boringen }: { boringen: Boring[] }) {
                     {/* Rasterlijnen */}
                     {months.map((m, i) => (
                       <div key={i} style={{ position: 'absolute', left: `${m.pct}%`, top: 0, bottom: 0,
-                        width: '0.5px', background: 'var(--border)', opacity: 0.5 }} />
+                        width: m.isJan ? '1.5px' : '0.5px',
+                        background: m.isJan ? 'var(--border-md)' : 'var(--border)',
+                        opacity: m.isJan ? 0.8 : 0.4 }} />
                     ))}
 
                     {/* Vandaag-lijn */}
