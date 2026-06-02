@@ -1,309 +1,424 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { useToast } from '@/components/ui/ToastProvider';
-import StatusBadge from '@/components/ui/StatusBadge';
-import Modal from '@/components/ui/Modal';
-import { COLS, FASEN, STATUS_VALUES, statusClass } from '@/lib/constants';
-import { getProjectNaam } from '@/lib/utils';
-import type { Werkpakket, Contactpersoon, OntwerpLaag, Opmerking, StatusValue, CelData } from '@/types';
+import type { Werkpakket } from '@/types';
 
-type Section = 'status' | 'ontwerp' | 'contactpersonen' | 'opmerkingen';
+/* ── Types ──────────────────────────────────────────────────────────────────── */
+interface Boring {
+  id: string;
+  werkpakket_id: number;
+  boring_nr: string;
+  werkpakket_nr?: string;
+  locatie?: string;
+  lengte_m?: number;
+  type_boring?: string;
+  aannemer?: string;
+  klasse?: string;
+  prioritering?: string;
+  planning_apds?: string;
+  apd_verantw?: string;
+  status_ontwerp?: string;
+  hdd_tek_pct?: number;
+  status_werkterrein?: string;
+  status_berekening?: string;
+  bundel_configuratie?: string;
+  opmerkingen?: string;
+  status: string;
+  vervallen?: boolean;
+}
 
+/* ── Kleurcodering zoals Excel ───────────────────────────────────────────────── */
+const SC: Record<string, { bg: string; fg: string }> = {
+  'Vrijgegeven':  { bg: '#1A7F3C', fg: '#fff' },
+  'Goedgekeurd':  { bg: '#8BC34A', fg: '#fff' },
+  'Ter controle': { bg: '#F5C842', fg: '#1A1A1A' },
+  'Gestart':      { bg: '#F5A623', fg: '#fff' },
+  'Issue':        { bg: '#D70015', fg: '#fff' },
+  'Vertraagd':    { bg: '#D70015', fg: '#fff' },
+  'Niet gestart': { bg: '#F3F4F6', fg: '#6B7280' },
+  'Vervallen':    { bg: '#EBEBEB', fg: '#9CA3AF' },
+};
+
+function Pill({ status }: { status?: string }) {
+  if (!status) return <span style={{ color: '#D1D5DB', fontSize: 11 }}>—</span>;
+  const c = SC[status] ?? { bg: '#F3F4F6', fg: '#6B7280' };
+  return (
+    <span style={{ display: 'inline-block', fontSize: 10, fontWeight: 600, padding: '2px 9px',
+      borderRadius: 20, background: c.bg, color: c.fg, whiteSpace: 'nowrap' }}>
+      {status}
+    </span>
+  );
+}
+
+function TekBar({ pct }: { pct?: number }) {
+  if (pct == null) return <span style={{ color: '#D1D5DB', fontSize: 11 }}>—</span>;
+  const p = Math.round(pct * 100);
+  const bg = p === 100 ? '#1A7F3C' : p >= 75 ? '#8BC34A' : p >= 50 ? '#F5C842' : p > 0 ? '#F5A623' : '#E5E7EB';
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 80 }}>
+      <div style={{ flex: 1, height: 5, borderRadius: 3, background: '#E5E7EB', overflow: 'hidden' }}>
+        <div style={{ width: `${p}%`, height: '100%', background: bg, borderRadius: 3 }} />
+      </div>
+      <span style={{ fontSize: 10, fontWeight: 600, color: bg === '#E5E7EB' ? '#9CA3AF' : bg, minWidth: 30 }}>{p}%</span>
+    </div>
+  );
+}
+
+/* ── Pagina ──────────────────────────────────────────────────────────────────── */
 export default function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const mode = 'editor';
   const toast = useToast();
 
-  const [project, setProject] = useState<Werkpakket | null>(null);
-  const [activeSection, setActiveSection] = useState<Section>('status');
-  const [contactpersonen, setContactpersonen] = useState<Contactpersoon[]>([]);
-  const [ontwerplagen, setOntwerplagen] = useState<OntwerpLaag[]>([]);
-  const [opmerkingen, setOpmerkingen] = useState<Opmerking[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [picker, setPicker] = useState<{ colIdx: number; x: number; y: number } | null>(null);
-  const [contactModal, setContactModal] = useState(false);
-  const [contactForm, setContactForm] = useState<Partial<Contactpersoon>>({});
-  const [editContactId, setEditContactId] = useState<string | null>(null);
-  const [newOpmerking, setNewOpmerking] = useState('');
+  const [project, setProject]   = useState<Werkpakket | null>(null);
+  const [boringen, setBoringen] = useState<Boring[]>([]);
+  const [loading, setLoading]   = useState(true);
+  const [filterVervallen, setFilterVervallen] = useState(false);
+  const [filterStatus, setFilterStatus]       = useState('');
+  const [filterAannemer, setFilterAannemer]   = useState('');
+  const [filterWP, setFilterWP]               = useState('');
+  const [search, setSearch]                   = useState('');
+  const [sortCol, setSortCol]                 = useState<keyof Boring | null>(null);
+  const [sortDir, setSortDir]                 = useState(1);
+  const [selectedBoring, setSelectedBoring]   = useState<Boring | null>(null);
 
   const rowIdx = parseInt(id);
 
   const load = useCallback(async () => {
     setLoading(true);
     const supabase = createClient();
-    const { data: wp } = await supabase.from('werkpakketten').select('*').eq('row_idx', rowIdx).single();
+    const [{ data: wp }, { data: bor }] = await Promise.all([
+      supabase.from('werkpakketten').select('*').eq('row_idx', rowIdx).single(),
+      supabase.from('boringen').select('*').eq('werkpakket_id', rowIdx).order('boring_nr'),
+    ]);
     setProject(wp as Werkpakket | null);
+    setBoringen((bor ?? []) as Boring[]);
     setLoading(false);
   }, [rowIdx]);
 
-  const loadSection = useCallback(async (section: Section) => {
-    const supabase = createClient();
-    if (section === 'contactpersonen') {
-      const { data } = await supabase.from('contactpersonen').select('*').eq('werkpakket_id', rowIdx).order('created_at', { ascending: true });
-      setContactpersonen((data ?? []) as Contactpersoon[]);
-    } else if (section === 'ontwerp') {
-      const { data } = await supabase.from('ontwerp_lagen').select('*').eq('werkpakket_id', rowIdx).order('created_at', { ascending: true });
-      setOntwerplagen((data ?? []) as OntwerpLaag[]);
-    } else if (section === 'opmerkingen') {
-      const { data } = await supabase.from('opmerkingen').select('*').eq('werkpakket_id', rowIdx).order('created_at', { ascending: false });
-      setOpmerkingen((data ?? []) as Opmerking[]);
-    }
-  }, [rowIdx]);
-
   useEffect(() => { load(); }, [load]);
-  useEffect(() => { loadSection(activeSection); }, [activeSection, loadSection]);
 
-  const updateCell = async (colIdx: number, value: string) => {
-    if (!project) return;
-    const supabase = createClient();
-    const newData: CelData = { ...project.cel_data, [String(colIdx)]: value };
-    const { error } = await supabase.from('werkpakketten').update({ cel_data: newData as unknown as never, updated_at: new Date().toISOString() } as never).eq('row_idx', rowIdx);
-    if (error) { toast(error.message, 'error'); return; }
-    setProject(p => p ? { ...p, cel_data: newData } : p);
-    toast('Opgeslagen', 'success');
-    setPicker(null);
-  };
+  /* KPI's */
+  const kpi = useMemo(() => {
+    const active = boringen.filter(b => !b.vervallen);
+    return {
+      totaal:       active.length,
+      vrijgegeven:  active.filter(b => b.status_ontwerp === 'Vrijgegeven').length,
+      goedgekeurd:  active.filter(b => b.status_ontwerp === 'Goedgekeurd').length,
+      ter_controle: active.filter(b => b.status_ontwerp === 'Ter controle').length,
+      gestart:      active.filter(b => b.status_ontwerp === 'Gestart').length,
+      issue:        active.filter(b => ['Issue','Vertraagd'].includes(b.status_ontwerp??'')).length,
+      niet_gestart: active.filter(b => b.status_ontwerp === 'Niet gestart' || !b.status_ontwerp).length,
+      vervallen:    boringen.filter(b => b.vervallen).length,
+      totaal_m:     active.reduce((s, b) => s + (b.lengte_m ?? 0), 0),
+    };
+  }, [boringen]);
 
-  const saveContact = async () => {
-    const supabase = createClient();
-    try {
-      if (editContactId) {
-        await supabase.from('contactpersonen').update(contactForm as never).eq('id', editContactId);
-        toast('Contactpersoon bijgewerkt', 'success');
-      } else {
-        await supabase.from('contactpersonen').insert({ ...contactForm, werkpakket_id: rowIdx } as never);
-        toast('Contactpersoon toegevoegd', 'success');
+  /* Unieke filterwaarden */
+  const werkpakketten = useMemo(() => Array.from(new Set(boringen.map(b => b.werkpakket_nr).filter(Boolean) as string[])).sort(), [boringen]);
+  const aannemers     = useMemo(() => Array.from(new Set(boringen.map(b => b.aannemer).filter(Boolean) as string[])).sort(), [boringen]);
+  const statussen     = useMemo(() => Array.from(new Set(boringen.map(b => b.status_ontwerp).filter(Boolean) as string[])).sort(), [boringen]);
+
+  /* Gefilterde rijen */
+  const rows = useMemo(() => {
+    let r = boringen.filter(b => {
+      if (!filterVervallen && b.vervallen) return false;
+      if (filterVervallen && !b.vervallen) return false;
+      if (filterStatus   && b.status_ontwerp !== filterStatus) return false;
+      if (filterAannemer && b.aannemer !== filterAannemer) return false;
+      if (filterWP       && b.werkpakket_nr !== filterWP) return false;
+      if (search) {
+        const q = search.toLowerCase();
+        return [b.boring_nr, b.locatie, b.aannemer, b.bundel_configuratie]
+          .some(v => (v ?? '').toLowerCase().includes(q));
       }
-      setContactModal(false);
-      setContactForm({});
-      setEditContactId(null);
-      loadSection('contactpersonen');
-    } catch (e) { toast((e as Error).message, 'error'); }
-  };
+      return true;
+    });
+    if (sortCol) r = [...r].sort((a, b) => {
+      const av = String(a[sortCol] ?? ''), bv = String(b[sortCol] ?? '');
+      return av < bv ? -sortDir : av > bv ? sortDir : 0;
+    });
+    return r;
+  }, [boringen, filterVervallen, filterStatus, filterAannemer, filterWP, search, sortCol, sortDir]);
 
-  const deleteContact = async (id: string) => {
-    if (!confirm('Contactpersoon verwijderen?')) return;
-    const supabase = createClient();
-    await supabase.from('contactpersonen').delete().eq('id', id);
-    loadSection('contactpersonen');
-    toast('Verwijderd', 'success');
+  const sort = (col: keyof Boring) => {
+    if (sortCol === col) setSortDir(d => -d); else { setSortCol(col); setSortDir(1); }
   };
-
-  const addOpmerking = async () => {
-    if (!newOpmerking.trim()) return;
-    const supabase = createClient();
-    await supabase.from('opmerkingen').insert(({
-      werkpakket_id: rowIdx,
-      tekst: newOpmerking.trim(),
-      auteur: 'HVP',
-    }) as never);
-    setNewOpmerking('');
-    loadSection('opmerkingen');
-    toast('Opmerking toegevoegd', 'success');
-  };
+  const srt = (c: keyof Boring) => sortCol === c ? (sortDir > 0 ? ' ↑' : ' ↓') : '';
 
   if (loading) return <div className="page-content"><div className="loading-bar" /></div>;
   if (!project) return <div className="page-content"><div className="empty-state"><strong>Project niet gevonden</strong></div></div>;
 
-  const cd = project.cel_data;
-  const naam = getProjectNaam(cd, rowIdx);
-
-  const SECTIONS: { key: Section; label: string }[] = [
-    { key: 'status', label: 'Status & Taken' },
-    { key: 'ontwerp', label: 'Ontwerpdocumenten' },
-    { key: 'contactpersonen', label: 'Contactpersonen' },
-    { key: 'opmerkingen', label: 'Opmerkingen' },
-  ];
+  const cd  = project.cel_data as Record<string, string>;
+  const naam = cd['2'] ?? project.projectnaam;
 
   return (
     <div className="page-content">
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: '1rem' }}>
-        <button className="btn" style={{ fontSize: 12 }} onClick={() => router.push('/projecten')}>← Terug</button>
-        <div>
-          <h1 style={{ fontSize: 16, fontWeight: 700, letterSpacing: '-0.01em' }}>{naam}</h1>
-          <div style={{ fontSize: 11, color: 'var(--text-2)', marginTop: 2 }}>
-            {cd['0'] && <span>Int: <strong>{cd['0']}</strong></span>}
-            {cd['1'] && <span style={{ marginLeft: 10 }}>Ext: <strong>{cd['1']}</strong></span>}
-            {cd['5'] && <span style={{ marginLeft: 10 }}>WP: <strong>{cd['5']}</strong></span>}
+
+      {/* ── Header ──────────────────────────────────────────────────────────── */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: '1.25rem' }}>
+        <button className="btn" style={{ fontSize: 12, flexShrink: 0, marginTop: 2 }}
+          onClick={() => router.push('/projecten')}>← Terug</button>
+
+        <div style={{ flex: 1 }}>
+          <h1 style={{ fontSize: 18, fontWeight: 600, letterSpacing: '-0.3px', color: 'var(--text)', margin: 0 }}>
+            {naam}
+          </h1>
+          <div style={{ display: 'flex', gap: 16, marginTop: 6, flexWrap: 'wrap' }}>
+            {cd['0'] && <Meta label="Code"         value={cd['0']} />}
+            {cd['1'] && <Meta label="Casenummer"   value={cd['1']} />}
+            {cd['8'] && <Meta label="Projectleider" value={cd['8']} />}
+            {cd['fase'] && <Meta label="Fase"      value={cd['fase']} chip />}
           </div>
         </div>
       </div>
 
-      <div className="controls-bar" style={{ marginBottom: '1rem' }}>
-        {SECTIONS.map(s => (
-          <button key={s.key} className={`tab${activeSection === s.key ? ' active' : ''}`} onClick={() => setActiveSection(s.key)}>{s.label}</button>
-        ))}
+      {/* ── KPI balk ────────────────────────────────────────────────────────── */}
+      <div className="stats-bar" style={{ marginBottom: '1.25rem' }}>
+        <KPICard num={kpi.totaal}       label="Boringen"     />
+        <KPICard num={kpi.vrijgegeven}  label="Vrijgegeven"  color="#1A7F3C" />
+        <KPICard num={kpi.goedgekeurd}  label="Goedgekeurd"  color="#8BC34A" />
+        <KPICard num={kpi.ter_controle} label="Ter controle" color="#D97706" />
+        <KPICard num={kpi.gestart}      label="Gestart"      color="#F5A623" />
+        <KPICard num={kpi.issue}        label="Issue / Vertr." color="#D70015" />
+        <KPICard num={kpi.niet_gestart} label="Niet gestart" color="#9CA3AF" />
+        <KPICard num={kpi.vervallen}    label="Vervallen"    color="#D1D5DB" />
+        <div className="stat-card" style={{ minWidth: 100 }}>
+          <span className="stat-num" style={{ fontSize: 16 }}>{Math.round(kpi.totaal_m).toLocaleString('nl-NL')} m</span>
+          <span className="stat-label">Totaal lengte</span>
+        </div>
       </div>
 
-      {/* Status & Taken */}
-      {activeSection === 'status' && (
-        <div>
-          {FASEN.map(fase => (
-            <div key={fase.f} style={{ marginBottom: '1.25rem' }}>
-              <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--text-3)', marginBottom: '0.625rem' }}>{fase.l}</div>
-              <div className="table-wrap">
-                <table>
-                  <thead><tr><th>Taak</th><th>Status</th></tr></thead>
-                  <tbody>
-                    {fase.statCols.map(ci => {
-                      const col = COLS.find(c => c.i === ci);
-                      if (!col) return null;
-                      const val = cd[String(ci)] ?? '';
-                      return (
-                        <tr key={ci}>
-                          <td>{col.n}</td>
-                          <td
-                            className={mode === 'editor' ? 'editable' : ''}
-                            onClick={mode === 'editor' ? (e) => {
-                              const rect = (e.target as HTMLElement).getBoundingClientRect();
-                              setPicker({ colIdx: ci, x: rect.left, y: rect.bottom + 4 });
-                            } : undefined}
-                          >
-                            <StatusBadge status={val as StatusValue} />
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Ontwerpdocumenten */}
-      {activeSection === 'ontwerp' && (
-        <div>
-          <div style={{ marginBottom: '0.875rem' }}>
-            <button className="btn btn-primary" onClick={async () => {
-              const naam = prompt('Naam ontwerpdocument:');
-              if (!naam) return;
-              const supabase = createClient();
-              await supabase.from('ontwerp_lagen').insert({ werkpakket_id: rowIdx, naam } as never);
-              loadSection('ontwerp');
-              toast('Document toegevoegd', 'success');
-            }}>+ Document toevoegen</button>
+      {/* ── Voortgangsbalk totaal ────────────────────────────────────────────── */}
+      {kpi.totaal > 0 && (
+        <div style={{ background: 'var(--surface)', border: '0.5px solid var(--border)', borderRadius: 'var(--r-lg)',
+          padding: '0.875rem 1.125rem', marginBottom: '0.875rem', boxShadow: 'var(--sh-sm)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+            <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-2)' }}>Totale voortgang ontwerp</span>
+            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>
+              {kpi.vrijgegeven + kpi.goedgekeurd} / {kpi.totaal} vrijgegeven of goedgekeurd
+            </span>
           </div>
-          <div className="table-wrap">
-            <table>
-              <thead><tr><th>Naam</th><th>Versie</th><th>Status</th><th>Opmerking</th><th></th></tr></thead>
-              <tbody>
-                {ontwerplagen.length === 0 ? (
-                  <tr><td colSpan={5}><div className="empty-state"><strong>Geen documenten</strong></div></td></tr>
-                ) : ontwerplagen.map(d => (
-                  <tr key={d.id}>
-                    <td style={{ fontWeight: 500 }}>{d.naam}</td>
-                    <td>{d.versie || '—'}</td><td>{d.status || '—'}</td>
-                    <td style={{ color: 'var(--text-2)' }}>{d.opmerking || '—'}</td>
-                    <td>
-                      <button className="btn" style={{ padding: '2px 8px', fontSize: 11 }} onClick={async () => {
-                        if (!confirm('Verwijderen?')) return;
-                        const supabase = createClient();
-                        await supabase.from('ontwerp_lagen').delete().eq('id', d.id);
-                        loadSection('ontwerp');
-                      }}>✕</button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* Contactpersonen */}
-      {activeSection === 'contactpersonen' && (
-        <div>
-          <div style={{ marginBottom: '0.875rem' }}>
-            <button className="btn btn-primary" onClick={() => { setContactForm({}); setEditContactId(null); setContactModal(true); }}>+ Contactpersoon toevoegen</button>
-          </div>
-          <div className="table-wrap">
-            <table>
-              <thead><tr><th>Naam</th><th>Functie</th><th>Organisatie</th><th>E-mail</th><th>Telefoon</th><th></th></tr></thead>
-              <tbody>
-                {contactpersonen.length === 0 ? (
-                  <tr><td colSpan={6}><div className="empty-state"><strong>Geen contactpersonen</strong></div></td></tr>
-                ) : contactpersonen.map(c => (
-                  <tr key={c.id}>
-                    <td style={{ fontWeight: 500 }}>{c.naam}</td>
-                    <td>{c.functie || '—'}</td><td>{c.organisatie || '—'}</td>
-                    <td>{c.email ? <a href={`mailto:${c.email}`} style={{ color: 'var(--accent)' }}>{c.email}</a> : '—'}</td>
-                    <td>{c.telefoon || '—'}</td>
-                    <td>
-                      <div style={{ display: 'flex', gap: 4 }}>
-                        <button className="btn" style={{ padding: '2px 8px', fontSize: 11 }} onClick={() => { setContactForm(c); setEditContactId(c.id); setContactModal(true); }}>✎</button>
-                        <button className="btn" style={{ padding: '2px 8px', fontSize: 11 }} onClick={() => deleteContact(c.id)}>✕</button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* Opmerkingen */}
-      {activeSection === 'opmerkingen' && (
-        <div>
-          <div style={{ marginBottom: '1rem', display: 'flex', gap: 8 }}>
-            <textarea value={newOpmerking} onChange={e => setNewOpmerking(e.target.value)} placeholder="Nieuwe opmerking..." style={{ flex: 1, padding: '8px 12px', border: '1px solid var(--border-md)', borderRadius: 'var(--r)', fontFamily: 'inherit', fontSize: 13, resize: 'vertical', minHeight: 72, outline: 'none' }} />
-            <button className="btn btn-primary" onClick={addOpmerking} style={{ alignSelf: 'flex-end', whiteSpace: 'nowrap' }}>Toevoegen</button>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.625rem' }}>
-            {opmerkingen.length === 0 ? (
-              <div className="empty-state"><strong>Geen opmerkingen</strong></div>
-            ) : opmerkingen.map(o => (
-              <div key={o.id} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', padding: '0.875rem 1.125rem', boxShadow: 'var(--sh-sm)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <span style={{ fontWeight: 600, fontSize: 12 }}>{o.auteur ?? 'Onbekend'}</span>
-                  <span style={{ fontSize: 11, color: 'var(--text-3)' }}>{new Date(o.created_at).toLocaleDateString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
-                </div>
-                <p style={{ fontSize: 13, color: 'var(--text)', margin: 0, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{o.tekst}</p>
-              </div>
+          <div style={{ display: 'flex', height: 10, borderRadius: 5, overflow: 'hidden', gap: 1 }}>
+            {[
+              { count: kpi.vrijgegeven,  color: '#1A7F3C' },
+              { count: kpi.goedgekeurd,  color: '#8BC34A' },
+              { count: kpi.ter_controle, color: '#F5C842' },
+              { count: kpi.gestart,      color: '#F5A623' },
+              { count: kpi.issue,        color: '#D70015' },
+              { count: kpi.niet_gestart, color: '#E5E7EB' },
+            ].filter(s => s.count > 0).map((s, i) => (
+              <div key={i} style={{ flex: s.count, background: s.color, minWidth: 2 }} />
             ))}
           </div>
         </div>
       )}
 
-      {/* Status picker */}
-      {picker && (
-        <div className="status-picker" style={{ position: 'fixed', left: picker.x, top: picker.y, zIndex: 200 }}>
-          {STATUS_VALUES.map(s => (
-            <button key={s} className="sp-option" onClick={() => updateCell(picker.colIdx, s)}>
-              <span className={`badge badge-${statusClass(s)}`} style={{ width: 8, height: 8, padding: 0, minWidth: 8, borderRadius: '50%' }} />{s}
-            </button>
-          ))}
-          <div style={{ borderTop: '1px solid var(--border)', margin: '4px 0 0', paddingTop: 4 }}>
-            <button className="sp-option" style={{ color: 'var(--text-3)' }} onClick={() => updateCell(picker.colIdx, '')}>Wissen</button>
+      {/* ── Controls ────────────────────────────────────────────────────────── */}
+      <div className="controls-bar">
+        <div className="search-wrap">
+          <span className="search-icon"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="5" stroke="currentColor" strokeWidth="1.5"/><path d="M11 11l3 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg></span>
+          <input className="search-input" placeholder="Zoeken..." value={search} onChange={e => setSearch(e.target.value)} />
+        </div>
+
+        {werkpakketten.length > 1 && (
+          <select className="field-input" style={{ width: 'auto', padding: '4px 28px 4px 10px' }}
+            value={filterWP} onChange={e => setFilterWP(e.target.value)}>
+            <option value="">Alle werkpakketten</option>
+            {werkpakketten.map(wp => <option key={wp}>{wp}</option>)}
+          </select>
+        )}
+
+        <select className="field-input" style={{ width: 'auto', padding: '4px 28px 4px 10px' }}
+          value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
+          <option value="">Alle statussen</option>
+          {statussen.map(s => <option key={s}>{s}</option>)}
+        </select>
+
+        {aannemers.length > 1 && (
+          <select className="field-input" style={{ width: 'auto', padding: '4px 28px 4px 10px' }}
+            value={filterAannemer} onChange={e => setFilterAannemer(e.target.value)}>
+            <option value="">Alle aannemers</option>
+            {aannemers.map(a => <option key={a}>{a}</option>)}
+          </select>
+        )}
+
+        <button className={`tab${filterVervallen ? ' active' : ''}`}
+          onClick={() => setFilterVervallen(v => !v)} style={{ fontSize: 11 }}>
+          {filterVervallen ? '✕ Vervallen' : 'Toon vervallen'}
+        </button>
+        <div style={{ flex: 1 }} />
+        <span style={{ fontSize: 11, color: 'var(--text-3)' }}>{rows.length} boringen</span>
+      </div>
+
+      {/* ── Tabel ───────────────────────────────────────────────────────────── */}
+      <div className="table-wrap">
+        <div className="tbl-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th className="sortable" onClick={() => sort('boring_nr')}>Boor nr{srt('boring_nr')}</th>
+                <th className="sortable" onClick={() => sort('werkpakket_nr')}>WP{srt('werkpakket_nr')}</th>
+                <th className="sortable" onClick={() => sort('locatie')}>Locatie{srt('locatie')}</th>
+                <th className="sortable" onClick={() => sort('lengte_m')}>L (m){srt('lengte_m')}</th>
+                <th className="sortable" onClick={() => sort('type_boring')}>Type{srt('type_boring')}</th>
+                <th className="sortable" onClick={() => sort('klasse')}>Klasse{srt('klasse')}</th>
+                <th className="sortable" onClick={() => sort('aannemer')}>Aannemer{srt('aannemer')}</th>
+                <th className="sortable" onClick={() => sort('apd_verantw')}>APD{srt('apd_verantw')}</th>
+                <th className="sortable" onClick={() => sort('status_ontwerp')}>HDD Ontwerp{srt('status_ontwerp')}</th>
+                <th>Tek %</th>
+                <th className="sortable" onClick={() => sort('status_werkterrein')}>Werkterrein{srt('status_werkterrein')}</th>
+                <th className="sortable" onClick={() => sort('status_berekening')}>Berekening{srt('status_berekening')}</th>
+                <th>Bundel</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.length === 0 ? (
+                <tr><td colSpan={13}><div className="empty-state"><strong>Geen boringen</strong></div></td></tr>
+              ) : rows.map(b => (
+                <tr key={b.id} onClick={() => setSelectedBoring(b)}
+                  style={{ cursor: 'pointer', opacity: b.vervallen ? 0.4 : 1,
+                    background: selectedBoring?.id === b.id ? 'var(--accent-2)' : undefined }}>
+                  <td style={{ fontWeight: 700, color: 'var(--text)' }}>
+                    {b.boring_nr}
+                    {b.prioritering && <span style={{ marginLeft: 5, fontSize: 9, fontWeight: 700,
+                      padding: '1px 5px', borderRadius: 4, background: '#FEF3C7', color: '#92400E' }}>⚑</span>}
+                  </td>
+                  <td style={{ color: 'var(--text-3)', fontSize: 11 }}>{b.werkpakket_nr || '—'}</td>
+                  <td style={{ maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', color: 'var(--text-2)' }}>{b.locatie || '—'}</td>
+                  <td style={{ fontVariantNumeric: 'tabular-nums' }}>{b.lengte_m ?? '—'}</td>
+                  <td style={{ fontSize: 11 }}>{b.type_boring || '—'}</td>
+                  <td>{b.klasse ? <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 4, background: 'var(--surface3)', border: '0.5px solid var(--border)' }}>{b.klasse}</span> : '—'}</td>
+                  <td style={{ fontSize: 11, color: 'var(--text-2)' }}>{b.aannemer || '—'}</td>
+                  <td style={{ fontSize: 11, color: 'var(--text-3)' }}>{b.apd_verantw || '—'}</td>
+                  <td><Pill status={b.status_ontwerp} /></td>
+                  <td><TekBar pct={b.hdd_tek_pct} /></td>
+                  <td><Pill status={b.status_werkterrein} /></td>
+                  <td><Pill status={b.status_berekening} /></td>
+                  <td style={{ fontSize: 11, color: 'var(--text-3)', maxWidth: 110, overflow: 'hidden', textOverflow: 'ellipsis' }}>{b.bundel_configuratie || '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* ── Detail paneel (slide-in rechts) ─────────────────────────────────── */}
+      {selectedBoring && (
+        <div style={{
+          position: 'fixed', top: 'var(--hdr-h)', right: 0, bottom: 0, width: 340,
+          background: 'var(--surface)', borderLeft: '0.5px solid var(--border)',
+          boxShadow: '-8px 0 32px rgba(0,0,0,0.08)', zIndex: 80,
+          overflowY: 'auto', padding: '1.25rem',
+          animation: 'slideInRight 0.2s cubic-bezier(0.34,1.1,0.64,1)',
+        }}>
+          <style>{`@keyframes slideInRight { from { transform: translateX(40px); opacity:0 } to { transform: none; opacity:1 } }`}</style>
+
+          <div style={{ display: 'flex', alignItems: 'center', marginBottom: '1.25rem' }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)' }}>{selectedBoring.boring_nr}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 2 }}>{naam}</div>
+            </div>
+            <button className="btn" style={{ padding: '3px 8px', fontSize: 13 }} onClick={() => setSelectedBoring(null)}>✕</button>
           </div>
+
+          <DetailSection title="HDD Gegevens">
+            <DRow label="Werkpakket"  value={selectedBoring.werkpakket_nr} />
+            <DRow label="Locatie"     value={selectedBoring.locatie} />
+            <DRow label="Lengte"      value={selectedBoring.lengte_m != null ? `${selectedBoring.lengte_m} m` : undefined} />
+            <DRow label="Type"        value={selectedBoring.type_boring} />
+            <DRow label="Klasse"      value={selectedBoring.klasse} />
+            <DRow label="Aannemer"    value={selectedBoring.aannemer} />
+            <DRow label="APD"         value={selectedBoring.apd_verantw} />
+            {selectedBoring.bundel_configuratie && <DRow label="Bundel" value={selectedBoring.bundel_configuratie} />}
+          </DetailSection>
+
+          <DetailSection title="Planning">
+            <DRow label="Planning APD's" value={selectedBoring.planning_apds
+              ? new Date(selectedBoring.planning_apds).toLocaleDateString('nl-NL')
+              : undefined} />
+          </DetailSection>
+
+          <DetailSection title="Status tekenwerk">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <StatusDetailRow label="HDD Ontwerp"  status={selectedBoring.status_ontwerp} pct={selectedBoring.hdd_tek_pct} />
+              <StatusDetailRow label="Werkterrein"  status={selectedBoring.status_werkterrein} />
+              <StatusDetailRow label="Berekening"   status={selectedBoring.status_berekening} />
+            </div>
+          </DetailSection>
+
+          {selectedBoring.opmerkingen && (
+            <DetailSection title="Opmerkingen">
+              <p style={{ fontSize: 11, color: 'var(--text-2)', lineHeight: 1.6, margin: 0,
+                background: '#FFFBEB', border: '0.5px solid #FDE68A', borderRadius: 6,
+                padding: '0.625rem 0.75rem', whiteSpace: 'pre-wrap' }}>
+                {selectedBoring.opmerkingen}
+              </p>
+            </DetailSection>
+          )}
         </div>
       )}
+    </div>
+  );
+}
 
-      {/* Contact modal */}
-      <Modal open={contactModal} onClose={() => { setContactModal(false); setContactForm({}); setEditContactId(null); }}
-        title={editContactId ? 'Contactpersoon bewerken' : 'Contactpersoon toevoegen'}
-        footer={<><button className="btn" onClick={() => setContactModal(false)}>Annuleren</button><button className="btn btn-primary" onClick={saveContact}>Opslaan</button></>}>
-        {[
-          { key: 'naam', label: 'Naam', required: true },
-          { key: 'functie', label: 'Functie' },
-          { key: 'organisatie', label: 'Organisatie' },
-          { key: 'email', label: 'E-mail', type: 'email' },
-          { key: 'telefoon', label: 'Telefoon', type: 'tel' },
-        ].map(f => (
-          <div key={f.key} className="field">
-            <label className="field-label">{f.label}{f.required && ' *'}</label>
-            <input className="field-input" type={f.type ?? 'text'}
-              value={(contactForm as Record<string, string>)[f.key] ?? ''}
-              onChange={e => setContactForm(d => ({ ...d, [f.key]: e.target.value }))} />
-          </div>
-        ))}
-      </Modal>
+/* ── Hulpcomponenten ─────────────────────────────────────────────────────────── */
+function Meta({ label, value, chip }: { label: string; value: string; chip?: boolean }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+      <span style={{ fontSize: 11, color: 'var(--text-4)' }}>{label}:</span>
+      {chip ? (
+        <span style={{ fontSize: 11, fontWeight: 600, padding: '1px 8px', borderRadius: 4,
+          background: 'var(--accent-2)', color: 'var(--accent)', border: '0.5px solid var(--accent)' }}>{value}</span>
+      ) : (
+        <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-2)' }}>{value}</span>
+      )}
+    </div>
+  );
+}
+
+function KPICard({ num, label, color }: { num: number; label: string; color?: string }) {
+  return (
+    <div className="stat-card">
+      <span className="stat-num" style={{ color: color ?? 'var(--text)', fontSize: 18 }}>{num}</span>
+      <span className="stat-label">{label}</span>
+    </div>
+  );
+}
+
+function DetailSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div style={{ marginBottom: '1rem' }}>
+      <div style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em',
+        color: 'var(--text-4)', marginBottom: 8, paddingBottom: 6, borderBottom: '0.5px solid var(--border)' }}>
+        {title}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function DRow({ label, value }: { label: string; value?: string | null }) {
+  if (!value) return null;
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr', gap: 4, marginBottom: 4, alignItems: 'start' }}>
+      <span style={{ fontSize: 11, color: 'var(--text-4)', fontWeight: 500, paddingTop: 1 }}>{label}</span>
+      <span style={{ fontSize: 11, color: 'var(--text)', fontWeight: 500 }}>{value}</span>
+    </div>
+  );
+}
+
+function StatusDetailRow({ label, status, pct }: { label: string; status?: string; pct?: number }) {
+  return (
+    <div>
+      <div style={{ fontSize: 10, color: 'var(--text-4)', marginBottom: 4 }}>{label}</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <Pill status={status} />
+        {pct != null && <TekBar pct={pct} />}
+      </div>
     </div>
   );
 }
