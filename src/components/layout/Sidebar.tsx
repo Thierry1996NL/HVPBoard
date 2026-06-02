@@ -35,21 +35,7 @@ const NAV: NavItem[] = [
     label: 'Boringen',
     icon: <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M8 2v12M5 5l3-3 3 3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/><ellipse cx="8" cy="13" rx="4" ry="1.5" stroke="currentColor" strokeWidth="1.4"/></svg>,
   },
-  {
-    href: '/duikers',
-    label: 'Duikers',
-    icon: <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><rect x="1" y="6" width="14" height="4" rx="2" stroke="currentColor" strokeWidth="1.4"/><path d="M4 6V4a2 2 0 014 0v2" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg>,
-  },
-  {
-    href: '/proefsleuven',
-    label: 'Proefsleuven',
-    icon: <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M2 14L5 6h6l3 8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/><path d="M4 10h8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg>,
-  },
-  {
-    href: '/omgevingsmanagement',
-    label: 'Omgeving',
-    icon: <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M8 2C5.2 2 3 4.2 3 7c0 3.5 5 9 5 9s5-5.5 5-9c0-2.8-2.2-5-5-5z" stroke="currentColor" strokeWidth="1.4"/><circle cx="8" cy="7" r="1.5" stroke="currentColor" strokeWidth="1.4"/></svg>,
-  },
+
 ];
 
 export default function Sidebar() {

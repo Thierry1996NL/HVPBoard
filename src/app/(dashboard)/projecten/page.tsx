@@ -7,18 +7,11 @@ import { useProjects } from '@/hooks/useProjects';
 import { useToast } from '@/components/ui/ToastProvider';
 import StatusBadge from '@/components/ui/StatusBadge';
 import Modal from '@/components/ui/Modal';
-import { COLS, FASEN, STATUS_VALUES, statusClass } from '@/lib/constants';
-import { getProjectNaam, getEngineer, getProjectStatus, getProgressPercent, wekenResterend } from '@/lib/utils';
+import { STATUS_VALUES, statusClass } from '@/lib/constants';
+import { getProjectNaam, getEngineer, getProjectStatus, getProgressPercent } from '@/lib/utils';
 import type { Werkpakket, CelData, StatusValue } from '@/types';
 
-// Status columns per fase for progress
-const ALL_STATUS_COLS = FASEN.flatMap(f => f.statCols);
 
-// ── Fase tabs ────────────────────────────────────────────────────────────────
-const FASE_TABS = [
-  { key: '', label: 'Alles' },
-  ...FASEN.map(f => ({ key: f.f, label: f.l })),
-];
 
 export default function ProjectenPage() {
   const router = useRouter();
@@ -29,7 +22,6 @@ export default function ProjectenPage() {
 
   // Filters
   const [search, setSearch] = useState('');
-  const [activeFase, setActiveFase] = useState('');
   const [filterEngineer, setFilterEngineer] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [showArchief, setShowArchief] = useState(false);
@@ -95,22 +87,15 @@ export default function ProjectenPage() {
     return counts;
   }, [rows]);
 
-  // Visible columns for active fase
-  const visibleCols = useMemo(() => {
-    const baseCols = [
-      { i: 0, n: 'Proj. nr int.' },
-      { i: 2, n: 'Projectnaam' },
-      { i: 5, n: 'WP nr' },
-      { i: 8, n: 'Engineer' },
-    ];
-    if (!activeFase) return baseCols;
-    const faseDef = FASEN.find(f => f.f === activeFase);
-    if (!faseDef) return baseCols;
-    const faseCols = COLS.filter(c => c.f === activeFase);
-    return [...baseCols, ...faseCols.map(c => ({ i: c.i, n: c.n }))];
-  }, [activeFase]);
+  // Vaste basiskolommen — geen fase-filtering meer
+  const visibleCols = [
+    { i: 0, n: 'Proj. nr int.' },
+    { i: 2, n: 'Projectnaam' },
+    { i: 5, n: 'WP nr' },
+    { i: 8, n: 'Engineer' },
+  ];
 
-  const isStatusCol = (colIdx: number) => ALL_STATUS_COLS.includes(colIdx);
+  const isStatusCol = (_colIdx: number) => false;
 
   const openPicker = (e: React.MouseEvent, rowIdx: number, colIdx: number) => {
     if (mode !== 'editor') return;
@@ -189,22 +174,9 @@ export default function ProjectenPage() {
         </div>
       </div>
 
-      {/* Fase tabs */}
+      {/* Controls */}
       <div className="controls-bar">
-        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', flex: 1 }}>
-          {FASE_TABS.map(tab => (
-            <button
-              key={tab.key}
-              className={`tab${activeFase === tab.key ? ' active' : ''}`}
-              onClick={() => setActiveFase(tab.key)}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Right-side controls */}
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', flex: 1 }}>
           {/* Search */}
           <div className="search-wrap">
             <span className="search-icon">
@@ -268,8 +240,8 @@ export default function ProjectenPage() {
                 {visibleCols.map(col => (
                   <th key={col.i}>{col.n}</th>
                 ))}
-                {!activeFase && <th>Voortgang</th>}
-                {!activeFase && <th>Status</th>}
+                <th>Voortgang</th>
+                <th>Status</th>
                 <th></th>
               </tr>
             </thead>
@@ -286,7 +258,7 @@ export default function ProjectenPage() {
               ) : (
                 rows.map(p => {
                   const cd = p.cel_data;
-                  const progress = getProgressPercent(cd, ALL_STATUS_COLS);
+                  const progress = getProgressPercent(cd, []);
                   const overallStatus = getProjectStatus(cd);
 
                   return (
@@ -311,21 +283,17 @@ export default function ProjectenPage() {
                       })}
 
                       {/* Progress */}
-                      {!activeFase && (
-                        <td>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <div className="progress-bar">
-                              <div className="progress-fill" style={{ width: `${progress}%` }} />
-                            </div>
-                            <span style={{ fontSize: 10, color: 'var(--text-3)', minWidth: 26 }}>{progress}%</span>
+                      <td>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <div className="progress-bar">
+                            <div className="progress-fill" style={{ width: `${progress}%` }} />
                           </div>
-                        </td>
-                      )}
+                          <span style={{ fontSize: 10, color: 'var(--text-3)', minWidth: 26 }}>{progress}%</span>
+                        </div>
+                      </td>
 
                       {/* Overall status */}
-                      {!activeFase && (
-                        <td><StatusBadge status={overallStatus} /></td>
-                      )}
+                      <td><StatusBadge status={overallStatus} /></td>
 
                       {/* Actions */}
                       <td onClick={e => e.stopPropagation()}>
