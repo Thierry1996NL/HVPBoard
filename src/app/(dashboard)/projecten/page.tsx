@@ -9,15 +9,63 @@ import StatusBadge from '@/components/ui/StatusBadge';
 import Modal from '@/components/ui/Modal';
 import { STATUS_VALUES, statusClass } from '@/lib/constants';
 import { getProjectNaam, getEngineer, getProjectStatus, getProgressPercent } from '@/lib/utils';
+import { createClient } from '@/lib/supabase/client';
 import type { Werkpakket, CelData, StatusValue } from '@/types';
 
+interface BoringSummary {
+  werkpakket_id: number;
+  status_ontwerp?: string;
+  hdd_tek_pct?: number;
+  planning_apds?: string;
+  vervallen?: boolean;
+}
 
+/* Bereken samenvatting per project op basis van boringen */
+function useBoringSummaries() {
+  const [boringen, setBoringen] = useState<BoringSummary[]>([]);
+  useEffect(() => {
+    createClient()
+      .from('boringen')
+      .select('werkpakket_id, status_ontwerp, hdd_tek_pct, planning_apds, vervallen')
+      .then(({ data }) => setBoringen((data ?? []) as BoringSummary[]));
+  }, []);
+
+  return useMemo(() => {
+    const map = new Map<number, {
+      totaal: number; vrijgegeven: number; gemTekPct: number;
+      eersteDeadline: string | null; weekenRest: number | null;
+    }>();
+    const byProject = new Map<number, BoringSummary[]>();
+    for (const b of boringen) {
+      if (!byProject.has(b.werkpakket_id)) byProject.set(b.werkpakket_id, []);
+      byProject.get(b.werkpakket_id)!.push(b);
+    }
+    byProject.forEach((bors, pid) => {
+      const active = bors.filter(b => !b.vervallen);
+      const vrijgegeven = active.filter(b => ['Vrijgegeven','Goedgekeurd'].includes(b.status_ontwerp ?? '')).length;
+      const tekPcts = active.map(b => b.hdd_tek_pct ?? 0);
+      const gemTek = tekPcts.length ? tekPcts.reduce((a, b) => a + b, 0) / tekPcts.length : 0;
+      const upcoming = active
+        .filter(b => b.planning_apds)
+        .map(b => ({ date: b.planning_apds!, ms: new Date(b.planning_apds!).getTime() }))
+        .sort((a, b) => a.ms - b.ms);
+      // Prioriteer nog niet-verlopen deadlines, anders meest recente verlopen
+      const nu = Date.now();
+      const future = upcoming.filter(d => d.ms >= nu);
+      const best = future.length ? future[0] : upcoming[upcoming.length - 1] ?? null;
+      const weekenRest = best ? Math.round((best.ms - nu) / (1000*60*60*24*7)) : null;
+      map.set(pid, { totaal: active.length, vrijgegeven, gemTekPct: gemTek, eersteDeadline: best?.date ?? null, weekenRest });
+    });
+    return map;
+  }, [boringen]);
+}
 
 export default function ProjectenPage() {
   const router = useRouter();
   
   const mode = 'editor';
   const { projects, loading, updateCell, createProject, deleteProject } = useProjects();
+  const boringSummaries = useBoringSummaries();
   const toast = useToast();
 
   // Filters
@@ -240,15 +288,18 @@ export default function ProjectenPage() {
                 {visibleCols.map(col => (
                   <th key={col.i}>{col.n}</th>
                 ))}
-                <th>Voortgang</th>
-                <th>Status</th>
+                <th>Boringen</th>
+                <th>Ontwerp ✓</th>
+                <th>Gem. Tek %</th>
+                <th>Eerste deadline</th>
+                <th>Weken</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={visibleCols.length + 3}>
+                  <td colSpan={visibleCols.length + 6}>
                     <div className="empty-state">
                       <strong>Geen projecten gevonden</strong>
                       Pas de filters aan of maak een nieuw project aan.
@@ -258,61 +309,91 @@ export default function ProjectenPage() {
               ) : (
                 rows.map(p => {
                   const cd = p.cel_data;
-                  const progress = getProgressPercent(cd, []);
                   const overallStatus = getProjectStatus(cd);
+                  const bs = boringSummaries.get(p.row_idx);
+
+                  // Ontwerp % (Vrijgegeven + Goedgekeurd / totaal)
+                  const ontwerpPct = bs && bs.totaal > 0 ? Math.round((bs.vrijgegeven / bs.totaal) * 100) : null;
+                  const gemTekPct  = bs && bs.totaal > 0 ? Math.round(bs.gemTekPct * 100) : null;
+                  const wk = bs?.weekenRest ?? null;
 
                   return (
                     <tr key={p.row_idx} style={{ cursor: 'pointer' }} onClick={() => router.push(`/project/${p.row_idx}`)}>
                       {visibleCols.map(col => {
                         const val = cd[String(col.i)] ?? '';
                         const isStatus = isStatusCol(col.i);
-
                         return (
-                          <td
-                            key={col.i}
+                          <td key={col.i}
                             className={isStatus && mode === 'editor' ? 'editable' : ''}
-                            onClick={isStatus ? (e) => { e.stopPropagation(); openPicker(e, p.row_idx, col.i); } : undefined}
-                          >
-                            {isStatus ? (
-                              <StatusBadge status={val as StatusValue} />
-                            ) : (
-                              <span>{val || <span style={{ color: 'var(--text-3)' }}>—</span>}</span>
-                            )}
+                            onClick={isStatus ? (e) => { e.stopPropagation(); openPicker(e, p.row_idx, col.i); } : undefined}>
+                            {isStatus ? <StatusBadge status={val as StatusValue} /> : <span>{val || <span style={{ color: 'var(--text-3)' }}>—</span>}</span>}
                           </td>
                         );
                       })}
 
-                      {/* Progress */}
-                      <td>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <div className="progress-bar">
-                            <div className="progress-fill" style={{ width: `${progress}%` }} />
-                          </div>
-                          <span style={{ fontSize: 10, color: 'var(--text-3)', minWidth: 26 }}>{progress}%</span>
-                        </div>
+                      {/* Boringen totaal */}
+                      <td style={{ fontVariantNumeric: 'tabular-nums' }}>
+                        {bs ? (
+                          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>{bs.totaal}</span>
+                        ) : <span style={{ color: 'var(--text-4)' }}>—</span>}
                       </td>
 
-                      {/* Overall status */}
-                      <td><StatusBadge status={overallStatus} /></td>
+                      {/* Ontwerp % vrijgegeven */}
+                      <td>
+                        {ontwerpPct !== null ? (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <div style={{ width: 48, height: 4, borderRadius: 2, background: '#E5E7EB', overflow: 'hidden' }}>
+                              <div style={{ width: `${ontwerpPct}%`, height: '100%', borderRadius: 2,
+                                background: ontwerpPct === 100 ? '#1A7F3C' : ontwerpPct >= 75 ? '#8BC34A' : ontwerpPct >= 50 ? '#F5C842' : '#F5A623' }} />
+                            </div>
+                            <span style={{ fontSize: 10, fontWeight: 600,
+                              color: ontwerpPct === 100 ? '#1A7F3C' : ontwerpPct >= 50 ? '#D97706' : '#991B1B', minWidth: 28 }}>
+                              {ontwerpPct}%
+                            </span>
+                          </div>
+                        ) : <span style={{ color: 'var(--text-4)', fontSize: 11 }}>—</span>}
+                      </td>
+
+                      {/* Gem. Tek % */}
+                      <td>
+                        {gemTekPct !== null ? (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <div style={{ width: 40, height: 3, borderRadius: 2, background: '#E5E7EB', overflow: 'hidden' }}>
+                              <div style={{ width: `${gemTekPct}%`, height: '100%', borderRadius: 2,
+                                background: gemTekPct === 100 ? '#1A7F3C' : gemTekPct >= 75 ? '#8BC34A' : '#F5A623' }} />
+                            </div>
+                            <span style={{ fontSize: 10, color: 'var(--text-3)' }}>{gemTekPct}%</span>
+                          </div>
+                        ) : <span style={{ color: 'var(--text-4)', fontSize: 11 }}>—</span>}
+                      </td>
+
+                      {/* Eerste deadline */}
+                      <td style={{ fontSize: 11, color: 'var(--text-3)', whiteSpace: 'nowrap' }}>
+                        {bs?.eersteDeadline
+                          ? new Date(bs.eersteDeadline).toLocaleDateString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric' })
+                          : <span style={{ color: 'var(--text-4)' }}>—</span>}
+                      </td>
+
+                      {/* Weken resterend */}
+                      <td>
+                        {wk !== null ? (
+                          <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 20, whiteSpace: 'nowrap',
+                            background: wk < 0 ? '#FEE2E2' : wk <= 4 ? '#FEF3C7' : '#D1FAE5',
+                            color: wk < 0 ? '#991B1B' : wk <= 4 ? '#92400E' : '#065F46',
+                            border: `0.5px solid ${wk < 0 ? '#FECACA' : wk <= 4 ? '#FDE68A' : '#A7F3D0'}` }}>
+                            {wk < 0 ? `${Math.abs(wk)}w te laat` : `${wk}w`}
+                          </span>
+                        ) : <span style={{ color: 'var(--text-4)', fontSize: 11 }}>—</span>}
+                      </td>
 
                       {/* Actions */}
                       <td onClick={e => e.stopPropagation()}>
                         <div style={{ display: 'flex', gap: 4 }}>
-                          <button
-                            className="btn"
-                            style={{ padding: '3px 8px', fontSize: 11 }}
-                            onClick={() => router.push(`/project/${p.row_idx}`)}
-                          >
-                            Detail
-                          </button>
+                          <button className="btn" style={{ padding: '3px 8px', fontSize: 11 }}
+                            onClick={() => router.push(`/project/${p.row_idx}`)}>Detail</button>
                           {mode === 'editor' && (
-                            <button
-                              className="btn"
-                              style={{ padding: '3px 8px', fontSize: 11 }}
-                              onClick={() => openProjectModal(p.row_idx)}
-                            >
-                              ✎
-                            </button>
+                            <button className="btn" style={{ padding: '3px 8px', fontSize: 11 }}
+                              onClick={() => openProjectModal(p.row_idx)}>✎</button>
                           )}
                         </div>
                       </td>
