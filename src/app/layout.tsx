@@ -3,8 +3,8 @@ import './globals.css';
 import { ToastProvider } from '@/components/ui/ToastProvider';
 
 export const metadata: Metadata = {
-  title: 'HVP Board',
-  description: 'Projectbeheer en voortgang',
+  title: 'HVP HDD Dashboard',
+  description: 'HVP HDD Dashboard — Projectbeheer en voortgang',
   manifest: '/manifest.json',
 };
 

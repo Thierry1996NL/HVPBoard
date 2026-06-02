@@ -66,7 +66,7 @@ export default function Sidebar() {
             whiteSpace: 'nowrap',
           }}>
             <div style={{ fontSize: 13, fontWeight: 500, color: '#fff', letterSpacing: '-0.2px' }}>
-              HVP<span style={{ fontWeight: 400, color: 'rgba(255,255,255,0.5)' }}>Board</span>
+              <span style={{ color: '#fff', fontWeight: 600 }}>HVP</span><span style={{ fontWeight: 400, color: 'rgba(255,255,255,0.38)', fontSize: 11 }}> HDD Dashboard</span>
             </div>
           </div>
         </div>
@@ -96,7 +96,7 @@ export default function Sidebar() {
             transition: 'opacity 0.15s',
             opacity: collapsed ? 0 : 1,
           }}>
-            HVP Board · v1.0
+            HVP HDD Dashboard · v1.0
           </div>
         </div>
       </nav>

@@ -63,7 +63,7 @@ export default function LoginPage() {
           <HVPLogo size={56} />
           <div style={{ textAlign: 'center' }}>
             <div style={{ fontSize: 20, fontWeight: 500, color: '#0D1520', letterSpacing: '-0.3px' }}>
-              HVP<span style={{ fontWeight: 400, color: '#3D6B9E' }}>Board</span>
+              <span style={{ fontWeight: 600 }}>HVP</span><span style={{ fontWeight: 400, color: '#9CA3AF' }}> HDD Dashboard</span>
             </div>
             <div style={{ fontSize: 12, color: '#9CA3AF', marginTop: 4 }}>
               Projectbeheer &amp; voortgang

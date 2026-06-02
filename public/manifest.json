@@ -1,7 +1,7 @@
 {
-  "name": "HVP Board",
-  "short_name": "HVP",
-  "description": "HVP Board — Projectbeheer en voortgang",
+  "name": "HVP HDD Dashboard",
+  "short_name": "HVP HDD",
+  "description": "HVP HDD Dashboard — Projectbeheer en voortgang",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
