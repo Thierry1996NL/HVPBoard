@@ -42,6 +42,21 @@ const SC: Record<string, { bg: string; fg: string }> = {
   'Vervallen':    { bg: '#F3F4F6', fg: '#9CA3AF' },
 };
 
+/* ── KPI-filter definities ───────────────────────────────────────────────────── */
+type KpiKey = 'vrijgegeven' | 'goedgekeurd' | 'ter_controle' | 'gestart' | 'issue' | 'niet_gestart';
+const KPI_MATCH: Record<KpiKey, (b: Boring) => boolean> = {
+  vrijgegeven:  b => b.status_ontwerp === 'Vrijgegeven',
+  goedgekeurd:  b => b.status_ontwerp === 'Goedgekeurd',
+  ter_controle: b => b.status_ontwerp === 'Ter controle',
+  gestart:      b => b.status_ontwerp === 'Gestart',
+  issue:        b => ['Issue', 'Vertraagd'].includes(b.status_ontwerp ?? ''),
+  niet_gestart: b => !b.status_ontwerp || b.status_ontwerp === 'Niet gestart',
+};
+const KPI_LABEL: Record<KpiKey, string> = {
+  vrijgegeven: 'Vrijgegeven', goedgekeurd: 'Goedgekeurd', ter_controle: 'Ter controle',
+  gestart: 'Gestart', issue: 'Issue / Vertraagd', niet_gestart: 'Niet gestart',
+};
+
 function Pill({ status }: { status?: string }) {
   if (!status) return <span style={{ color: '#D1D5DB', fontSize: 11 }}>—</span>;
   const c = SC[status] ?? { bg: '#F3F4F6', fg: '#6B7280' };
@@ -337,6 +352,7 @@ export default function ProjectDetailPage() {
 
   const [filterVervallen, setFilterVervallen] = useState(false);
   const [filterStatus,    setFilterStatus]    = useState('');
+  const [kpiFilter,       setKpiFilter]       = useState<KpiKey | ''>('');
   const [filterAannemer,  setFilterAannemer]  = useState('');
   const [filterWP,        setFilterWP]        = useState('');
   const [search,          setSearch]          = useState('');
@@ -384,6 +400,7 @@ export default function ProjectDetailPage() {
       if (!filterVervallen && b.vervallen) return false;
       if (filterVervallen  && !b.vervallen) return false;
       if (filterStatus   && b.status_ontwerp !== filterStatus) return false;
+      if (kpiFilter      && !KPI_MATCH[kpiFilter](b)) return false;
       if (filterAannemer && b.aannemer !== filterAannemer) return false;
       if (filterWP       && b.werkpakket_nr !== filterWP) return false;
       if (search) {
@@ -398,7 +415,26 @@ export default function ProjectDetailPage() {
       return av < bv ? -sortDir : av > bv ? sortDir : 0;
     });
     return r;
-  }, [boringen, filterVervallen, filterStatus, filterAannemer, filterWP, search, sortCol, sortDir]);
+  }, [boringen, filterVervallen, filterStatus, kpiFilter, filterAannemer, filterWP, search, sortCol, sortDir]);
+
+  /* KPI-kaart of voortgangssegment aangeklikt → filter de tabel */
+  const handleKpi = (key: KpiKey | 'totaal' | 'vervallen') => {
+    setActiveTab('overzicht');
+    setSelectedBoring(null);
+    if (key === 'totaal') {
+      setKpiFilter(''); setFilterStatus(''); setFilterAannemer('');
+      setFilterWP(''); setFilterVervallen(false); setSearch('');
+      return;
+    }
+    if (key === 'vervallen') {
+      setKpiFilter(''); setFilterStatus('');
+      setFilterVervallen(v => !v);
+      return;
+    }
+    setFilterVervallen(false);
+    setFilterStatus('');
+    setKpiFilter(k => (k === key ? '' : key));
+  };
 
   const sort = (col: keyof Boring) => {
     if (sortCol === col) setSortDir(d => -d); else { setSortCol(col); setSortDir(1); }
@@ -428,16 +464,32 @@ export default function ProjectDetailPage() {
         </div>
       </div>
 
-      {/* KPI balk */}
+      {/* KPI balk — klikbaar om de tabel te filteren */}
       <div className="stats-bar" style={{ marginBottom: '1rem' }}>
-        <KPICard num={kpi.totaal}       label="Boringen" />
-        <KPICard num={kpi.vrijgegeven}  label="Vrijgegeven"   color="#1A7F3C" />
-        <KPICard num={kpi.goedgekeurd}  label="Goedgekeurd"   color="#8BC34A" />
-        <KPICard num={kpi.ter_controle} label="Ter controle"  color="#D97706" />
-        <KPICard num={kpi.gestart}      label="Gestart"       color="#F5A623" />
-        <KPICard num={kpi.issue}        label="Issue / Vertr." color="#D70015" />
-        <KPICard num={kpi.niet_gestart} label="Niet gestart"  color="#9CA3AF" />
-        <KPICard num={kpi.vervallen}    label="Vervallen"     color="#D1D5DB" />
+        <KPICard num={kpi.totaal}       label="Boringen"
+          active={!kpiFilter && !filterStatus && !filterVervallen}
+          onClick={() => handleKpi('totaal')} />
+        <KPICard num={kpi.vrijgegeven}  label="Vrijgegeven"   color="#1A7F3C"
+          active={kpiFilter === 'vrijgegeven'  || filterStatus === 'Vrijgegeven'}
+          onClick={() => handleKpi('vrijgegeven')} />
+        <KPICard num={kpi.goedgekeurd}  label="Goedgekeurd"   color="#8BC34A"
+          active={kpiFilter === 'goedgekeurd'  || filterStatus === 'Goedgekeurd'}
+          onClick={() => handleKpi('goedgekeurd')} />
+        <KPICard num={kpi.ter_controle} label="Ter controle"  color="#D97706"
+          active={kpiFilter === 'ter_controle' || filterStatus === 'Ter controle'}
+          onClick={() => handleKpi('ter_controle')} />
+        <KPICard num={kpi.gestart}      label="Gestart"       color="#F5A623"
+          active={kpiFilter === 'gestart'      || filterStatus === 'Gestart'}
+          onClick={() => handleKpi('gestart')} />
+        <KPICard num={kpi.issue}        label="Issue / Vertr." color="#D70015"
+          active={kpiFilter === 'issue'}
+          onClick={() => handleKpi('issue')} />
+        <KPICard num={kpi.niet_gestart} label="Niet gestart"  color="#9CA3AF"
+          active={kpiFilter === 'niet_gestart'}
+          onClick={() => handleKpi('niet_gestart')} />
+        <KPICard num={kpi.vervallen}    label="Vervallen"     color="#D1D5DB"
+          active={filterVervallen}
+          onClick={() => handleKpi('vervallen')} />
         <div className="stat-card">
           <span className="stat-num" style={{ fontSize: 16 }}>{Math.round(kpi.totaal_m).toLocaleString('nl-NL')} m</span>
           <span className="stat-label">Totaal lengte</span>
@@ -454,14 +506,17 @@ export default function ProjectDetailPage() {
           </div>
           <div style={{ display: 'flex', height: 10, borderRadius: 5, overflow: 'hidden', gap: 1 }}>
             {[
-              { count: kpi.vrijgegeven,  color: '#1A7F3C' },
-              { count: kpi.goedgekeurd,  color: '#8BC34A' },
-              { count: kpi.ter_controle, color: '#F5C842' },
-              { count: kpi.gestart,      color: '#F5A623' },
-              { count: kpi.issue,        color: '#D70015' },
-              { count: kpi.niet_gestart, color: '#E5E7EB' },
+              { count: kpi.vrijgegeven,  color: '#1A7F3C', key: 'vrijgegeven'  as KpiKey },
+              { count: kpi.goedgekeurd,  color: '#8BC34A', key: 'goedgekeurd'  as KpiKey },
+              { count: kpi.ter_controle, color: '#F5C842', key: 'ter_controle' as KpiKey },
+              { count: kpi.gestart,      color: '#F5A623', key: 'gestart'      as KpiKey },
+              { count: kpi.issue,        color: '#D70015', key: 'issue'        as KpiKey },
+              { count: kpi.niet_gestart, color: '#E5E7EB', key: 'niet_gestart' as KpiKey },
             ].filter(s => s.count > 0).map((s, i) => (
-              <div key={i} style={{ flex: s.count, background: s.color, minWidth: 2 }} />
+              <div key={i} onClick={() => handleKpi(s.key)}
+                title={`${KPI_LABEL[s.key]}: ${s.count} — klik om te filteren`}
+                style={{ flex: s.count, background: s.color, minWidth: 2, cursor: 'pointer',
+                  opacity: kpiFilter && kpiFilter !== s.key ? 0.35 : 1, transition: 'opacity 0.15s' }} />
             ))}
           </div>
         </div>
@@ -488,7 +543,7 @@ export default function ProjectDetailPage() {
               {werkpakketten.map(wp => <option key={wp}>{wp}</option>)}
             </select>
           )}
-          <select className="field-input" style={{ width: 'auto', padding: '4px 28px 4px 10px' }} value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
+          <select className="field-input" style={{ width: 'auto', padding: '4px 28px 4px 10px' }} value={filterStatus} onChange={e => { setFilterStatus(e.target.value); setKpiFilter(''); }}>
             <option value="">Alle statussen</option>
             {statussen.map(s => <option key={s}>{s}</option>)}
           </select>
@@ -502,6 +557,11 @@ export default function ProjectDetailPage() {
             {filterVervallen ? '✕ Vervallen' : 'Toon vervallen'}
           </button>
           <div style={{ flex: 1 }} />
+          {kpiFilter && (
+            <button className="tab active" style={{ fontSize: 11 }} onClick={() => setKpiFilter('')}>
+              ✕ {KPI_LABEL[kpiFilter]}
+            </button>
+          )}
           <span style={{ fontSize: 11, color: 'var(--text-3)' }}>{rows.length} boringen</span>
         </>}
       </div>
@@ -644,9 +704,25 @@ function Meta({ label, value, chip }: { label: string; value: string; chip?: boo
     </div>
   );
 }
-function KPICard({ num, label, color }: { num: number; label: string; color?: string }) {
+function KPICard({ num, label, color, active, onClick }: { num: number; label: string; color?: string; active?: boolean; onClick?: () => void }) {
+  const clickable = !!onClick;
+  const accent = color ?? 'var(--accent)';
   return (
-    <div className="stat-card">
+    <div
+      className="stat-card"
+      onClick={onClick}
+      role={clickable ? 'button' : undefined}
+      tabIndex={clickable ? 0 : undefined}
+      title={clickable ? `Filter op "${label}"` : undefined}
+      onKeyDown={clickable ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick!(); } } : undefined}
+      style={{
+        cursor: clickable ? 'pointer' : 'default',
+        transition: 'box-shadow 0.15s, border-color 0.15s, background 0.15s',
+        border: active ? `1px solid ${accent}` : undefined,
+        boxShadow: active ? `0 0 0 3px ${color ? color + '26' : 'var(--accent-2)'}` : undefined,
+        background: active ? (color ? color + '12' : 'var(--accent-2)') : undefined,
+      }}
+    >
       <span className="stat-num" style={{ color: color ?? 'var(--text)', fontSize: 18 }}>{num}</span>
       <span className="stat-label">{label}</span>
     </div>
