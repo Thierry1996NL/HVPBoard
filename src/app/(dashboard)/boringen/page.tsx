@@ -28,6 +28,11 @@ interface Boring {
   sondering_nr?: string;
   bundel_configuratie?: string;
   opmerkingen?: string;
+  /* Engineering-traject */
+  intake_compleet?: boolean;
+  startdatum_engineering?: string;
+  deadline_engineering?: string;
+  engineering_afgerond?: boolean;
   status: string;
   vervallen?: boolean;
 }
@@ -55,6 +60,12 @@ function StatusPill({ status }: { status?: string }) {
       {c.label}
     </span>
   );
+}
+
+function Check({ v }: { v?: boolean }) {
+  return v
+    ? <span style={{ color: '#1A7F3C', fontWeight: 700, fontSize: 13 }}>✓</span>
+    : <span style={{ color: 'var(--text-4)', fontSize: 11 }}>—</span>;
 }
 
 function TekBar({ pct }: { pct?: number }) {
@@ -118,6 +129,26 @@ function BoringDetail({
           <Row label="Oplevering Toolgate" value={boring.oplevering_toolgate
             ? new Date(boring.oplevering_toolgate).toLocaleDateString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric' })
             : undefined} />
+        </Grid>
+      </Section>
+
+      {/* ── Sectie 2b: Engineering ─────────────────────────────────────────── */}
+      <Section title="Engineering">
+        <Grid>
+          <Row label="Intake compleet"        value={boring.intake_compleet ? 'Ja' : 'Nee'} />
+          <Row label="Engineering afgerond"   value={boring.engineering_afgerond ? 'Ja' : 'Nee'} />
+          <Row label="Startdatum engineering" value={boring.startdatum_engineering
+            ? new Date(boring.startdatum_engineering).toLocaleDateString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric' })
+            : undefined} />
+          <Row label="Deadline engineering"   value={boring.deadline_engineering
+            ? new Date(boring.deadline_engineering).toLocaleDateString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric' })
+            : undefined} />
+          <Row label="Weken resterend" value={(() => {
+            if (boring.engineering_afgerond) return 'Afgerond';
+            if (!boring.deadline_engineering) return undefined;
+            const w = Math.round((new Date(boring.deadline_engineering).getTime() - Date.now()) / (1000 * 60 * 60 * 24 * 7));
+            return w < 0 ? `${Math.abs(w)} weken te laat` : `${w} weken`;
+          })()} span />
         </Grid>
       </Section>
 
@@ -371,17 +402,25 @@ export default function BoringenPage() {
                 <th className="sortable" onClick={() => sort('status_werkterrein')}>Werkterrein{srt('status_werkterrein')}</th>
                 <th className="sortable" onClick={() => sort('status_berekening')}>Berekening{srt('status_berekening')}</th>
                 <th className="sortable" onClick={() => sort('planning_apds')}>Planning APD{srt('planning_apds')}</th>
-                <th className="sortable" onClick={() => sort('planning_apds')}>Weken</th>
                 <th>Bundel</th>
                 <th>Project</th>
+                <th>Intake compleet</th>
+                <th className="sortable" onClick={() => sort('startdatum_engineering')}>Startdatum engineering{srt('startdatum_engineering')}</th>
+                <th className="sortable" onClick={() => sort('deadline_engineering')}>Deadline engineering{srt('deadline_engineering')}</th>
+                <th>Weken resterend</th>
+                <th>Engineering afgerond</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 ? (
-                <tr><td colSpan={16}><div className="empty-state"><strong>Geen boringen gevonden</strong>Pas de filters aan.</div></td></tr>
+                <tr><td colSpan={20}><div className="empty-state"><strong>Geen boringen gevonden</strong>Pas de filters aan.</div></td></tr>
               ) : rows.map(d => {
                 const sc = STATUS_COLORS[d.status_ontwerp ?? ''];
+                const engKlaar = !!d.engineering_afgerond;
+                const wkRest = d.deadline_engineering
+                  ? Math.round((new Date(d.deadline_engineering).getTime() - Date.now()) / (1000 * 60 * 60 * 24 * 7))
+                  : null;
                 return (
                   <tr key={d.id} onClick={() => setDetailId(d.id)}
                     style={{ cursor: 'pointer', opacity: d.vervallen ? 0.4 : 1 }}>
@@ -417,6 +456,25 @@ export default function BoringenPage() {
                     </td>
                     <td style={{ fontSize: 11, color: 'var(--text-3)', maxWidth: 110, overflow: 'hidden', textOverflow: 'ellipsis' }}>{d.bundel_configuratie || '—'}</td>
                     <td style={{ fontSize: 11, color: 'var(--text-3)' }}>{projects.find(p => p.id === d.werkpakket_id)?.label ?? '—'}</td>
+                    <td style={{ textAlign: 'center' }}><Check v={d.intake_compleet} /></td>
+                    <td style={{ fontSize: 11, color: 'var(--text-3)', whiteSpace: 'nowrap' }}>
+                      {d.startdatum_engineering ? new Date(d.startdatum_engineering).toLocaleDateString('nl-NL', {day:'2-digit',month:'2-digit',year:'numeric'}) : '—'}
+                    </td>
+                    <td style={{ fontSize: 11, color: 'var(--text-3)', whiteSpace: 'nowrap' }}>
+                      {d.deadline_engineering ? new Date(d.deadline_engineering).toLocaleDateString('nl-NL', {day:'2-digit',month:'2-digit',year:'numeric'}) : '—'}
+                    </td>
+                    <td style={{ whiteSpace: 'nowrap' }}>
+                      {engKlaar
+                        ? <span className="wk-chip wk-ok">afgerond</span>
+                        : wkRest === null
+                          ? <span style={{ color: 'var(--text-4)', fontSize: 11 }}>—</span>
+                          : wkRest < 0
+                            ? <span className="wk-chip wk-warn">{Math.abs(wkRest)}w te laat</span>
+                            : wkRest <= 4
+                              ? <span className="wk-chip wk-soon">{wkRest}w</span>
+                              : <span className="wk-chip wk-ok">{wkRest}w</span>}
+                    </td>
+                    <td style={{ textAlign: 'center' }}><Check v={d.engineering_afgerond} /></td>
                     <td onClick={e => e.stopPropagation()}>
                       <button className="btn" style={{ fontSize: 11, padding: '2px 8px' }} onClick={() => openEdit(d.id)}>✎</button>
                     </td>
@@ -477,6 +535,12 @@ export default function BoringenPage() {
           <F label="Werkterrein"><select className="field-input" value={form.status_werkterrein ?? ''} onChange={e => setForm(f => ({ ...f, status_werkterrein: e.target.value }))}><option value="">—</option>{OVERIGE_STATUS.map(s => <option key={s}>{s}</option>)}</select></F>
           <F label="Berekening"><select className="field-input" value={form.status_berekening ?? ''} onChange={e => setForm(f => ({ ...f, status_berekening: e.target.value }))}><option value="">—</option>{OVERIGE_STATUS.map(s => <option key={s}>{s}</option>)}</select></F>
           <F label="Planning APD's"><input className="field-input" type="date" value={form.planning_apds ?? ''} onChange={e => setForm(f => ({ ...f, planning_apds: e.target.value }))} /></F>
+          <div style={{ gridColumn: '1/-1', height: '0.5px', background: 'var(--border)' }} />
+          <F label="Intake compleet"><label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginTop: 6 }}><input type="checkbox" checked={form.intake_compleet ?? false} onChange={e => setForm(f => ({ ...f, intake_compleet: e.target.checked }))} style={{ width: 15, height: 15 }} /><span style={{ fontSize: 12 }}>Ja, intake is compleet</span></label></F>
+          <F label="Engineering afgerond"><label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginTop: 6 }}><input type="checkbox" checked={form.engineering_afgerond ?? false} onChange={e => setForm(f => ({ ...f, engineering_afgerond: e.target.checked }))} style={{ width: 15, height: 15 }} /><span style={{ fontSize: 12 }}>Ja, engineering afgerond</span></label></F>
+          <F label="Startdatum engineering"><input className="field-input" type="date" value={form.startdatum_engineering ?? ''} onChange={e => setForm(f => ({ ...f, startdatum_engineering: e.target.value || undefined }))} /></F>
+          <F label="Deadline engineering"><input className="field-input" type="date" value={form.deadline_engineering ?? ''} onChange={e => setForm(f => ({ ...f, deadline_engineering: e.target.value || undefined }))} /></F>
+          <div style={{ gridColumn: '1/-1', height: '0.5px', background: 'var(--border)' }} />
           <F label="Proefsleuf nr."><input className="field-input" value={form.proefsleuf_nr ?? ''} onChange={e => setForm(f => ({ ...f, proefsleuf_nr: e.target.value }))} /></F>
           <F label="Sondering nr."><input className="field-input" value={form.sondering_nr ?? ''} onChange={e => setForm(f => ({ ...f, sondering_nr: e.target.value }))} /></F>
           <F label="Prioritering"><input className="field-input" value={form.prioritering ?? ''} placeholder="bijv. PRIO" onChange={e => setForm(f => ({ ...f, prioritering: e.target.value }))} /></F>

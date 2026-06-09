@@ -581,6 +581,7 @@ select.field-input {
   padding: 2px 7px; border-radius: 10px;
 }
 .wk-ok   { background: var(--g-bg); color: var(--g-fg); border: 0.5px solid var(--g-mid); }
+.wk-soon { background: #FEF3C7; color: #92400E; border: 0.5px solid #FDE68A; }
 .wk-warn { background: var(--r-bg); color: var(--r-fg); border: 0.5px solid var(--r-mid); }
 .wk-over { background: var(--b-bg); color: var(--b-fg); border: 0.5px solid var(--b-mid); }
 
