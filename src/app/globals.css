@@ -585,6 +585,33 @@ select.field-input {
 .wk-warn { background: var(--r-bg); color: var(--r-fg); border: 0.5px solid var(--r-mid); }
 .wk-over { background: var(--b-bg); color: var(--b-fg); border: 0.5px solid var(--b-mid); }
 
+/* Inline-bewerkbare tabelcellen */
+.inline-cell { position: relative; }
+.inline-cell:hover { background: var(--surface3); }
+.inline-cell.editing { background: var(--accent-3); }
+.inline-edit {
+  width: 100%;
+  min-width: 70px;
+  font-size: 11px;
+  font-family: inherit;
+  padding: 3px 5px;
+  margin: -2px 0;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text-2);
+  outline: none;
+  box-sizing: border-box;
+  cursor: pointer;
+}
+.inline-edit:focus { box-shadow: 0 0 0 2px var(--accent-2); }
+
+/* Versleepbare kolomkoppen */
+.col-draggable { cursor: grab; user-select: none; }
+.col-draggable:active { cursor: grabbing; }
+.col-draggable.dragging { opacity: 0.4; }
+.col-draggable.drag-over { box-shadow: inset 3px 0 0 0 var(--accent); }
+
 /* ── Search input ────────────────────────────────────────────────────────── */
 .search-input {
   padding: 5px 10px 5px 30px;

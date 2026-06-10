@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, Fragment } from 'react';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useModuleData } from '@/hooks/useModuleData';
 import Modal from '@/components/ui/Modal';
@@ -66,6 +66,79 @@ function Check({ v }: { v?: boolean }) {
   return v
     ? <span style={{ color: '#1A7F3C', fontWeight: 700, fontSize: 13 }}>✓</span>
     : <span style={{ color: 'var(--text-4)', fontSize: 11 }}>—</span>;
+}
+
+type InlineOpt = { value: string | number; label: string };
+
+/* Inline-bewerkbare tabelcel. Klik opent een invoerveld; opslaan gebeurt direct.
+   'bool' wisselt meteen bij klik. Klik op editbare cel opent niet het detailpaneel. */
+function InlineCell({
+  type, value, display, onSave, options, tdStyle,
+}: {
+  type: 'text' | 'number' | 'date' | 'select' | 'bool';
+  value: string | number | boolean | undefined;
+  display: React.ReactNode;
+  onSave: (v: string | number | boolean | undefined) => void;
+  options?: InlineOpt[];
+  tdStyle?: React.CSSProperties;
+}) {
+  const [editing, setEditing] = useState(false);
+
+  if (type === 'bool') {
+    return (
+      <td className="inline-cell" title="Klik om te wisselen"
+        style={{ textAlign: 'center', cursor: 'pointer', ...tdStyle }}
+        onClick={e => { e.stopPropagation(); onSave(!value); }}>
+        {display}
+      </td>
+    );
+  }
+
+  if (!editing) {
+    return (
+      <td className="inline-cell" title="Klik om te bewerken"
+        style={{ cursor: 'pointer', ...tdStyle }}
+        onClick={e => { e.stopPropagation(); setEditing(true); }}>
+        {display}
+      </td>
+    );
+  }
+
+  const numericSelect = type === 'select' && typeof options?.[0]?.value === 'number';
+  const commit = (raw: string) => {
+    setEditing(false);
+    let next: string | number | undefined;
+    if (raw === '') next = undefined;
+    else if (type === 'number' || numericSelect) next = Number(raw);
+    else next = raw;
+    if (String(next ?? '') !== String(value ?? '')) onSave(next);
+  };
+  const openPicker = (el: HTMLInputElement) => {
+    try { (el as HTMLInputElement & { showPicker?: () => void }).showPicker?.(); } catch { /* icoon werkt nog */ }
+  };
+
+  return (
+    <td className="inline-cell editing" style={{ ...tdStyle }} onClick={e => e.stopPropagation()}>
+      {type === 'select' ? (
+        <select className="inline-edit" autoFocus defaultValue={String(value ?? '')}
+          onChange={e => commit(e.target.value)} onBlur={() => setEditing(false)}>
+          {options?.map(o => <option key={String(o.value)} value={String(o.value)}>{o.label}</option>)}
+        </select>
+      ) : type === 'date' ? (
+        <input className="inline-edit" type="date" autoFocus defaultValue={value ? String(value) : ''}
+          onChange={e => commit(e.target.value)} onBlur={() => setEditing(false)}
+          onFocus={e => openPicker(e.currentTarget)} onClick={e => openPicker(e.currentTarget)} />
+      ) : (
+        <input className="inline-edit" type={type === 'number' ? 'number' : 'text'} autoFocus
+          defaultValue={value !== undefined ? String(value) : ''}
+          onBlur={e => commit(e.target.value)}
+          onKeyDown={e => {
+            if (e.key === 'Enter') { e.preventDefault(); (e.target as HTMLInputElement).blur(); }
+            else if (e.key === 'Escape') { e.preventDefault(); setEditing(false); }
+          }} />
+      )}
+    </td>
+  );
 }
 
 function TekBar({ pct }: { pct?: number }) {
@@ -243,6 +316,34 @@ const AANNEMERS      = ['Heijmans', 'Heijmans DTE', 'Heijmans (Nano)', 'Pol', 'V
 const ONTWERP_STATUS = ['Niet gestart', 'Gestart', 'Ter controle', 'Goedgekeurd', 'Vrijgegeven', 'Issue', 'Vertraagd', 'Vervallen'];
 const OVERIGE_STATUS = ['Niet gestart', 'Gestart', 'Ter controle', 'Goedgekeurd', 'Vrijgegeven', 'Voldoet', 'N.v.t.', 'Vervallen'];
 
+/* Bouwt opties voor een inline-select; voegt standaard een lege ('—') optie toe. */
+const toOpts = (arr: string[], empty = true): InlineOpt[] =>
+  (empty ? [{ value: '', label: '—' }] : []).concat(arr.map(s => ({ value: s, label: s })));
+
+/* Verplaatsbare kolommen: id's, standaardvolgorde en opslag-sleutel. */
+type ColId =
+  | 'boring_nr' | 'project' | 'werkpakket_nr' | 'locatie' | 'lengte_m'
+  | 'type_boring' | 'klasse' | 'aannemer' | 'status_ontwerp' | 'status_werkterrein'
+  | 'status_berekening' | 'planning_apds' | 'intake_compleet' | 'startdatum_engineering'
+  | 'deadline_engineering' | 'weken_resterend' | 'engineering_afgerond';
+
+const DEFAULT_COL_ORDER: ColId[] = [
+  'boring_nr', 'project', 'werkpakket_nr', 'locatie', 'lengte_m', 'type_boring', 'klasse',
+  'aannemer', 'status_ontwerp', 'status_werkterrein', 'status_berekening', 'planning_apds',
+  'intake_compleet', 'startdatum_engineering', 'deadline_engineering', 'weken_resterend',
+  'engineering_afgerond',
+];
+const COL_ORDER_KEY = 'hvp_boringen_colorder_v1';
+
+const fmtDate = (s?: string) =>
+  s ? new Date(s).toLocaleDateString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—';
+const statusPill = (s?: string) => {
+  const c = STATUS_COLORS[s ?? ''];
+  return c
+    ? <span style={{ fontSize: 10, fontWeight: 600, padding: '3px 9px', borderRadius: 20, background: c.bg, color: c.fg, whiteSpace: 'nowrap' }}>{s}</span>
+    : <span style={{ color: 'var(--text-4)', fontSize: 11 }}>—</span>;
+};
+
 /* ── Hoofd-pagina ───────────────────────────────────────────────────────────── */
 export default function BoringenPage() {
   const toast = useToast();
@@ -258,6 +359,54 @@ export default function BoringenPage() {
   const [sortCol, setSortCol]               = useState<keyof Boring | null>(null);
   const [sortDir, setSortDir]               = useState(1);
 
+  /* Kolomvolgorde (versleepbaar), bewaard in de browser. */
+  const [columnOrder, setColumnOrder] = useState<ColId[]>(DEFAULT_COL_ORDER);
+  const [dragCol, setDragCol]         = useState<ColId | null>(null);
+  const [dragOverCol, setDragOverCol] = useState<ColId | null>(null);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(COL_ORDER_KEY);
+      if (!raw) return;
+      const saved = JSON.parse(raw) as ColId[];
+      const known = saved.filter(id => DEFAULT_COL_ORDER.includes(id));
+      const missing = DEFAULT_COL_ORDER.filter(id => !known.includes(id));
+      setColumnOrder([...known, ...missing]);
+    } catch { /* negeer onleesbare opslag */ }
+  }, []);
+
+  useEffect(() => {
+    try { localStorage.setItem(COL_ORDER_KEY, JSON.stringify(columnOrder)); } catch { /* negeer */ }
+  }, [columnOrder]);
+
+  const onColDragStart = (e: React.DragEvent, id: ColId) => {
+    setDragCol(id);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', id);
+  };
+  const onColDragOver = (e: React.DragEvent, id: ColId) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (id !== dragOverCol) setDragOverCol(id);
+  };
+  const onColDrop = (e: React.DragEvent, id: ColId) => {
+    e.preventDefault();
+    const from = dragCol;
+    setDragCol(null);
+    setDragOverCol(null);
+    if (!from || from === id) return;
+    setColumnOrder(prev => {
+      const arr = [...prev];
+      const fi = arr.indexOf(from), ti = arr.indexOf(id);
+      if (fi < 0 || ti < 0) return prev;
+      arr.splice(fi, 1);
+      arr.splice(ti, 0, from);
+      return arr;
+    });
+  };
+  const onColDragEnd = () => { setDragCol(null); setDragOverCol(null); };
+  const resetColumns = () => setColumnOrder(DEFAULT_COL_ORDER);
+
   const [detailId, setDetailId] = useState<string | null>(null);
   const [editId, setEditId]     = useState<string | null>(null);
   const [editModal, setEditModal] = useState(false);
@@ -265,6 +414,7 @@ export default function BoringenPage() {
 
   const detailBoring  = data.find(d => d.id === detailId);
   const detailProject = detailBoring ? projects.find(p => p.id === detailBoring.werkpakket_id)?.label : undefined;
+  const projectOpts: InlineOpt[] = projects.map(p => ({ value: p.id, label: p.label }));
 
   const stats = useMemo(() => {
     const a = data.filter(d => !d.vervallen);
@@ -336,7 +486,130 @@ export default function BoringenPage() {
     catch (e) { toast((e as Error).message, 'error'); }
   };
 
+  /* Inline opslaan van één veld direct vanuit de tabel. */
+  const saveField = async (id: string, patch: Partial<Boring>) => {
+    let next = patch;
+    if ('status_ontwerp' in patch) {
+      const os = patch.status_ontwerp ?? '';
+      let appStatus = 'Nog te starten';
+      if (os === 'Vrijgegeven' || os === 'Goedgekeurd') appStatus = 'Gereed';
+      else if (os === 'Ter controle') appStatus = 'Review';
+      else if (os === 'Gestart')      appStatus = 'Loopt';
+      else if (os === 'Issue' || os === 'Vertraagd') appStatus = 'Geblokkeerd';
+      next = { ...patch, status: appStatus };
+    }
+    try { await save(id, next); }
+    catch (e) { toast((e as Error).message, 'error'); }
+  };
+
   if (loading) return <div className="page-content"><div className="loading-bar" /></div>;
+
+  /* Kolomdefinities: label + (optioneel) sorteerveld + celweergave. Header en cellen komen hieruit. */
+  const columns: Record<ColId, { label: string; sortKey?: keyof Boring; cell: (d: Boring) => React.ReactNode }> = {
+    boring_nr: { label: 'Boor nr', sortKey: 'boring_nr', cell: d => (
+      <InlineCell type="text" value={d.boring_nr} tdStyle={{ fontWeight: 600 }}
+        display={<span>{d.boring_nr || '—'}</span>}
+        onSave={v => saveField(d.id, { boring_nr: (v ?? '') as string })} />
+    ) },
+    project: { label: 'Project', cell: d => (
+      <InlineCell type="select" value={d.werkpakket_id} options={projectOpts}
+        tdStyle={{ fontSize: 12, color: 'var(--text-2)' }}
+        display={<span>{projects.find(p => p.id === d.werkpakket_id)?.label ?? '—'}</span>}
+        onSave={v => saveField(d.id, { werkpakket_id: v as number })} />
+    ) },
+    werkpakket_nr: { label: 'WP', sortKey: 'werkpakket_nr', cell: d => (
+      <InlineCell type="text" value={d.werkpakket_nr} tdStyle={{ color: 'var(--text-3)', fontSize: 11 }}
+        display={<span>{d.werkpakket_nr || '—'}</span>}
+        onSave={v => saveField(d.id, { werkpakket_nr: v as string | undefined })} />
+    ) },
+    locatie: { label: 'Locatie', sortKey: 'locatie', cell: d => (
+      <InlineCell type="text" value={d.locatie} tdStyle={{ color: 'var(--text-2)' }}
+        display={<span style={{ display: 'block', maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis' }}>{d.locatie || '—'}</span>}
+        onSave={v => saveField(d.id, { locatie: v as string | undefined })} />
+    ) },
+    lengte_m: { label: 'L (m)', sortKey: 'lengte_m', cell: d => (
+      <InlineCell type="number" value={d.lengte_m} tdStyle={{ fontVariantNumeric: 'tabular-nums' }}
+        display={<span>{d.lengte_m ?? '—'}</span>}
+        onSave={v => saveField(d.id, { lengte_m: v as number | undefined })} />
+    ) },
+    type_boring: { label: 'Type', sortKey: 'type_boring', cell: d => (
+      <InlineCell type="select" value={d.type_boring} options={toOpts(TYPES_BORING)}
+        display={<span>{d.type_boring || '—'}</span>}
+        onSave={v => saveField(d.id, { type_boring: v as string | undefined })} />
+    ) },
+    klasse: { label: 'Klasse', sortKey: 'klasse', cell: d => (
+      <InlineCell type="select" value={d.klasse} options={toOpts(KLASSEN)}
+        display={d.klasse
+          ? <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 4, background: 'var(--surface3)', border: '0.5px solid var(--border)' }}>{d.klasse}</span>
+          : <span style={{ color: 'var(--text-4)', fontSize: 11 }}>—</span>}
+        onSave={v => saveField(d.id, { klasse: v as string | undefined })} />
+    ) },
+    aannemer: { label: 'Aannemer', sortKey: 'aannemer', cell: d => (
+      <InlineCell type="select" value={d.aannemer} options={toOpts(AANNEMERS)}
+        tdStyle={{ fontSize: 12, color: 'var(--text-2)' }}
+        display={<span>{d.aannemer || '—'}</span>}
+        onSave={v => saveField(d.id, { aannemer: v as string | undefined })} />
+    ) },
+    status_ontwerp: { label: 'HDD Ontwerp', sortKey: 'status_ontwerp', cell: d => (
+      <InlineCell type="select" value={d.status_ontwerp} options={toOpts(ONTWERP_STATUS)}
+        display={statusPill(d.status_ontwerp)}
+        onSave={v => saveField(d.id, { status_ontwerp: v as string | undefined })} />
+    ) },
+    status_werkterrein: { label: 'Werkterrein', sortKey: 'status_werkterrein', cell: d => (
+      <InlineCell type="select" value={d.status_werkterrein} options={toOpts(OVERIGE_STATUS)}
+        display={statusPill(d.status_werkterrein)}
+        onSave={v => saveField(d.id, { status_werkterrein: v as string | undefined })} />
+    ) },
+    status_berekening: { label: 'Berekening', sortKey: 'status_berekening', cell: d => (
+      <InlineCell type="select" value={d.status_berekening} options={toOpts(OVERIGE_STATUS)}
+        display={statusPill(d.status_berekening)}
+        onSave={v => saveField(d.id, { status_berekening: v as string | undefined })} />
+    ) },
+    planning_apds: { label: 'Planning APD', sortKey: 'planning_apds', cell: d => (
+      <InlineCell type="date" value={d.planning_apds} tdStyle={{ fontSize: 11, color: 'var(--text-3)', whiteSpace: 'nowrap' }}
+        display={<span>{fmtDate(d.planning_apds)}</span>}
+        onSave={v => saveField(d.id, { planning_apds: v as string | undefined })} />
+    ) },
+    intake_compleet: { label: 'Intake compleet', cell: d => (
+      <InlineCell type="bool" value={d.intake_compleet}
+        display={<Check v={d.intake_compleet} />}
+        onSave={v => saveField(d.id, { intake_compleet: v as boolean })} />
+    ) },
+    startdatum_engineering: { label: 'Startdatum engineering', sortKey: 'startdatum_engineering', cell: d => (
+      <InlineCell type="date" value={d.startdatum_engineering} tdStyle={{ fontSize: 11, color: 'var(--text-3)', whiteSpace: 'nowrap' }}
+        display={<span>{fmtDate(d.startdatum_engineering)}</span>}
+        onSave={v => saveField(d.id, { startdatum_engineering: v as string | undefined })} />
+    ) },
+    deadline_engineering: { label: 'Deadline engineering', sortKey: 'deadline_engineering', cell: d => (
+      <InlineCell type="date" value={d.deadline_engineering} tdStyle={{ fontSize: 11, color: 'var(--text-3)', whiteSpace: 'nowrap' }}
+        display={<span>{fmtDate(d.deadline_engineering)}</span>}
+        onSave={v => saveField(d.id, { deadline_engineering: v as string | undefined })} />
+    ) },
+    weken_resterend: { label: 'Weken resterend', cell: d => {
+      const engKlaar = !!d.engineering_afgerond;
+      const wkRest = d.deadline_engineering
+        ? Math.round((new Date(d.deadline_engineering).getTime() - Date.now()) / (1000 * 60 * 60 * 24 * 7))
+        : null;
+      return (
+        <td style={{ whiteSpace: 'nowrap' }} title="Automatisch berekend uit de deadline — klik opent het detailpaneel">
+          {engKlaar
+            ? <span className="wk-chip wk-ok">afgerond</span>
+            : wkRest === null
+              ? <span style={{ color: 'var(--text-4)', fontSize: 11 }}>—</span>
+              : wkRest < 0
+                ? <span className="wk-chip wk-warn">{Math.abs(wkRest)}w te laat</span>
+                : wkRest <= 4
+                  ? <span className="wk-chip wk-soon">{wkRest}w</span>
+                  : <span className="wk-chip wk-ok">{wkRest}w</span>}
+        </td>
+      );
+    } },
+    engineering_afgerond: { label: 'Engineering afgerond', cell: d => (
+      <InlineCell type="bool" value={d.engineering_afgerond}
+        display={<Check v={d.engineering_afgerond} />}
+        onSave={v => saveField(d.id, { engineering_afgerond: v as boolean })} />
+    ) },
+  };
 
   return (
     <div className="page-content">
@@ -381,6 +654,7 @@ export default function BoringenPage() {
           {showVervallen ? '✕ Vervallen' : 'Toon vervallen'}
         </button>
         <div style={{ flex: 1 }} />
+        <button className="btn" onClick={resetColumns} style={{ fontSize: 11 }} title="Zet de kolomvolgorde terug naar standaard">↺ Kolommen</button>
         <button className="btn btn-primary" onClick={() => openEdit()}>+ Boring toevoegen</button>
       </div>
 
@@ -390,97 +664,40 @@ export default function BoringenPage() {
           <table>
             <thead>
               <tr>
-                <th className="sortable" onClick={() => sort('boring_nr')}>Boor nr{srt('boring_nr')}</th>
-                <th className="sortable" onClick={() => sort('werkpakket_nr')}>WP{srt('werkpakket_nr')}</th>
-                <th className="sortable" onClick={() => sort('locatie')}>Locatie{srt('locatie')}</th>
-                <th className="sortable" onClick={() => sort('lengte_m')}>L (m){srt('lengte_m')}</th>
-                <th className="sortable" onClick={() => sort('type_boring')}>Type{srt('type_boring')}</th>
-                <th className="sortable" onClick={() => sort('klasse')}>Klasse{srt('klasse')}</th>
-                <th className="sortable" onClick={() => sort('aannemer')}>Aannemer{srt('aannemer')}</th>
-                <th className="sortable" onClick={() => sort('status_ontwerp')}>HDD Ontwerp{srt('status_ontwerp')}</th>
-                <th>Tek %</th>
-                <th className="sortable" onClick={() => sort('status_werkterrein')}>Werkterrein{srt('status_werkterrein')}</th>
-                <th className="sortable" onClick={() => sort('status_berekening')}>Berekening{srt('status_berekening')}</th>
-                <th className="sortable" onClick={() => sort('planning_apds')}>Planning APD{srt('planning_apds')}</th>
-                <th>Bundel</th>
-                <th>Project</th>
-                <th>Intake compleet</th>
-                <th className="sortable" onClick={() => sort('startdatum_engineering')}>Startdatum engineering{srt('startdatum_engineering')}</th>
-                <th className="sortable" onClick={() => sort('deadline_engineering')}>Deadline engineering{srt('deadline_engineering')}</th>
-                <th>Weken resterend</th>
-                <th>Engineering afgerond</th>
+                {columnOrder.map(id => {
+                  const col = columns[id];
+                  const sortable = !!col.sortKey;
+                  const cls = ['col-draggable'];
+                  if (sortable) cls.push('sortable');
+                  if (dragCol === id) cls.push('dragging');
+                  if (dragOverCol === id && dragCol && dragCol !== id) cls.push('drag-over');
+                  return (
+                    <th key={id} className={cls.join(' ')} draggable
+                      title="Sleep om te verplaatsen"
+                      onDragStart={e => onColDragStart(e, id)}
+                      onDragOver={e => onColDragOver(e, id)}
+                      onDrop={e => onColDrop(e, id)}
+                      onDragEnd={onColDragEnd}
+                      onClick={sortable ? () => sort(col.sortKey!) : undefined}>
+                      {col.label}{sortable ? srt(col.sortKey!) : null}
+                    </th>
+                  );
+                })}
                 <th></th>
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 ? (
-                <tr><td colSpan={20}><div className="empty-state"><strong>Geen boringen gevonden</strong>Pas de filters aan.</div></td></tr>
-              ) : rows.map(d => {
-                const sc = STATUS_COLORS[d.status_ontwerp ?? ''];
-                const engKlaar = !!d.engineering_afgerond;
-                const wkRest = d.deadline_engineering
-                  ? Math.round((new Date(d.deadline_engineering).getTime() - Date.now()) / (1000 * 60 * 60 * 24 * 7))
-                  : null;
-                return (
+                <tr><td colSpan={18}><div className="empty-state"><strong>Geen boringen gevonden</strong>Pas de filters aan.</div></td></tr>
+              ) : rows.map(d => (
                   <tr key={d.id} onClick={() => setDetailId(d.id)}
                     style={{ cursor: 'pointer', opacity: d.vervallen ? 0.4 : 1 }}>
-                    <td style={{ fontWeight: 600 }}>{d.boring_nr}</td>
-                    <td style={{ color: 'var(--text-3)', fontSize: 11 }}>{d.werkpakket_nr || '—'}</td>
-                    <td style={{ maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', color: 'var(--text-2)' }}>{d.locatie || '—'}</td>
-                    <td style={{ fontVariantNumeric: 'tabular-nums' }}>{d.lengte_m ?? '—'}</td>
-                    <td>{d.type_boring || '—'}</td>
-                    <td>
-                      {d.klasse ? <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 4,
-                        background: 'var(--surface3)', border: '0.5px solid var(--border)' }}>{d.klasse}</span> : '—'}
-                    </td>
-                    <td style={{ fontSize: 12, color: 'var(--text-2)' }}>{d.aannemer || '—'}</td>
-                    <td>
-                      {sc ? (
-                        <span style={{ fontSize: 10, fontWeight: 600, padding: '3px 9px', borderRadius: 20,
-                          background: sc.bg, color: sc.fg, whiteSpace: 'nowrap' }}>{d.status_ontwerp}</span>
-                      ) : <span style={{ color: 'var(--text-4)', fontSize: 11 }}>—</span>}
-                    </td>
-                    <td><TekBar pct={d.hdd_tek_pct} /></td>
-                    <td>
-                      {(() => { const c = STATUS_COLORS[d.status_werkterrein ?? '']; return c
-                        ? <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 20, background: c.bg, color: c.fg }}>{d.status_werkterrein}</span>
-                        : <span style={{ color: 'var(--text-4)', fontSize: 11 }}>—</span>; })()}
-                    </td>
-                    <td>
-                      {(() => { const c = STATUS_COLORS[d.status_berekening ?? '']; return c
-                        ? <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 20, background: c.bg, color: c.fg }}>{d.status_berekening}</span>
-                        : <span style={{ color: 'var(--text-4)', fontSize: 11 }}>—</span>; })()}
-                    </td>
-                    <td style={{ fontSize: 11, color: 'var(--text-3)', whiteSpace: 'nowrap' }}>
-                      {d.planning_apds ? new Date(d.planning_apds).toLocaleDateString('nl-NL', {day:'2-digit',month:'2-digit',year:'numeric'}) : '—'}
-                    </td>
-                    <td style={{ fontSize: 11, color: 'var(--text-3)', maxWidth: 110, overflow: 'hidden', textOverflow: 'ellipsis' }}>{d.bundel_configuratie || '—'}</td>
-                    <td style={{ fontSize: 11, color: 'var(--text-3)' }}>{projects.find(p => p.id === d.werkpakket_id)?.label ?? '—'}</td>
-                    <td style={{ textAlign: 'center' }}><Check v={d.intake_compleet} /></td>
-                    <td style={{ fontSize: 11, color: 'var(--text-3)', whiteSpace: 'nowrap' }}>
-                      {d.startdatum_engineering ? new Date(d.startdatum_engineering).toLocaleDateString('nl-NL', {day:'2-digit',month:'2-digit',year:'numeric'}) : '—'}
-                    </td>
-                    <td style={{ fontSize: 11, color: 'var(--text-3)', whiteSpace: 'nowrap' }}>
-                      {d.deadline_engineering ? new Date(d.deadline_engineering).toLocaleDateString('nl-NL', {day:'2-digit',month:'2-digit',year:'numeric'}) : '—'}
-                    </td>
-                    <td style={{ whiteSpace: 'nowrap' }}>
-                      {engKlaar
-                        ? <span className="wk-chip wk-ok">afgerond</span>
-                        : wkRest === null
-                          ? <span style={{ color: 'var(--text-4)', fontSize: 11 }}>—</span>
-                          : wkRest < 0
-                            ? <span className="wk-chip wk-warn">{Math.abs(wkRest)}w te laat</span>
-                            : wkRest <= 4
-                              ? <span className="wk-chip wk-soon">{wkRest}w</span>
-                              : <span className="wk-chip wk-ok">{wkRest}w</span>}
-                    </td>
-                    <td style={{ textAlign: 'center' }}><Check v={d.engineering_afgerond} /></td>
+                    {columnOrder.map(id => <Fragment key={id}>{columns[id].cell(d)}</Fragment>)}
                     <td onClick={e => e.stopPropagation()}>
                       <button className="btn" style={{ fontSize: 11, padding: '2px 8px' }} onClick={() => openEdit(d.id)}>✎</button>
                     </td>
                   </tr>
-                );
-              })}
+              ))}
             </tbody>
           </table>
         </div>
@@ -534,12 +751,12 @@ export default function BoringenPage() {
           <F label="HDD tek %"><select className="field-input" value={form.hdd_tek_pct ?? ''} onChange={e => setForm(f => ({ ...f, hdd_tek_pct: e.target.value ? parseFloat(e.target.value) : undefined }))}><option value="">—</option><option value="0">0%</option><option value="0.25">25%</option><option value="0.5">50%</option><option value="0.75">75%</option><option value="1">100%</option></select></F>
           <F label="Werkterrein"><select className="field-input" value={form.status_werkterrein ?? ''} onChange={e => setForm(f => ({ ...f, status_werkterrein: e.target.value }))}><option value="">—</option>{OVERIGE_STATUS.map(s => <option key={s}>{s}</option>)}</select></F>
           <F label="Berekening"><select className="field-input" value={form.status_berekening ?? ''} onChange={e => setForm(f => ({ ...f, status_berekening: e.target.value }))}><option value="">—</option>{OVERIGE_STATUS.map(s => <option key={s}>{s}</option>)}</select></F>
-          <F label="Planning APD's"><input className="field-input" type="date" value={form.planning_apds ?? ''} onChange={e => setForm(f => ({ ...f, planning_apds: e.target.value }))} /></F>
+          <F label="Planning APD's"><DateInput value={form.planning_apds} onChange={v => setForm(f => ({ ...f, planning_apds: v }))} /></F>
           <div style={{ gridColumn: '1/-1', height: '0.5px', background: 'var(--border)' }} />
           <F label="Intake compleet"><label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginTop: 6 }}><input type="checkbox" checked={form.intake_compleet ?? false} onChange={e => setForm(f => ({ ...f, intake_compleet: e.target.checked }))} style={{ width: 15, height: 15 }} /><span style={{ fontSize: 12 }}>Ja, intake is compleet</span></label></F>
           <F label="Engineering afgerond"><label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginTop: 6 }}><input type="checkbox" checked={form.engineering_afgerond ?? false} onChange={e => setForm(f => ({ ...f, engineering_afgerond: e.target.checked }))} style={{ width: 15, height: 15 }} /><span style={{ fontSize: 12 }}>Ja, engineering afgerond</span></label></F>
-          <F label="Startdatum engineering"><input className="field-input" type="date" value={form.startdatum_engineering ?? ''} onChange={e => setForm(f => ({ ...f, startdatum_engineering: e.target.value || undefined }))} /></F>
-          <F label="Deadline engineering"><input className="field-input" type="date" value={form.deadline_engineering ?? ''} onChange={e => setForm(f => ({ ...f, deadline_engineering: e.target.value || undefined }))} /></F>
+          <F label="Startdatum engineering"><DateInput value={form.startdatum_engineering} onChange={v => setForm(f => ({ ...f, startdatum_engineering: v }))} /></F>
+          <F label="Deadline engineering"><DateInput value={form.deadline_engineering} onChange={v => setForm(f => ({ ...f, deadline_engineering: v }))} /></F>
           <div style={{ gridColumn: '1/-1', height: '0.5px', background: 'var(--border)' }} />
           <F label="Proefsleuf nr."><input className="field-input" value={form.proefsleuf_nr ?? ''} onChange={e => setForm(f => ({ ...f, proefsleuf_nr: e.target.value }))} /></F>
           <F label="Sondering nr."><input className="field-input" value={form.sondering_nr ?? ''} onChange={e => setForm(f => ({ ...f, sondering_nr: e.target.value }))} /></F>
@@ -554,4 +771,22 @@ export default function BoringenPage() {
 
 function F({ label, children, span }: { label: string; children: React.ReactNode; span?: boolean }) {
   return <div style={{ gridColumn: span ? '1 / -1' : undefined }}><label className="field-label">{label}</label>{children}</div>;
+}
+
+/* Datumveld dat de kalender opent zodra je érgens in het veld klikt (geen tekst typen nodig). */
+function DateInput({ value, onChange }: { value?: string; onChange: (v: string | undefined) => void }) {
+  const openPicker = (el: HTMLInputElement) => {
+    try { (el as HTMLInputElement & { showPicker?: () => void }).showPicker?.(); } catch { /* oudere browser: icoon werkt nog */ }
+  };
+  return (
+    <input
+      className="field-input"
+      type="date"
+      value={value ?? ''}
+      style={{ cursor: 'pointer' }}
+      onClick={e => openPicker(e.currentTarget)}
+      onFocus={e => openPicker(e.currentTarget)}
+      onChange={e => onChange(e.target.value || undefined)}
+    />
+  );
 }
