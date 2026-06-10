@@ -334,6 +334,8 @@ const DEFAULT_COL_ORDER: ColId[] = [
   'engineering_afgerond',
 ];
 const COL_ORDER_KEY = 'hvp_boringen_colorder_v1';
+/* Sentinel voor de gecombineerde KPI-kaart Issue/Vertraagd. */
+const ISSUE_FILTER = '__issue_vertraagd__';
 
 const fmtDate = (s?: string) =>
   s ? new Date(s).toLocaleDateString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—';
@@ -428,6 +430,29 @@ export default function BoringenPage() {
     };
   }, [data]);
 
+  /* Welke KPI-kaart is op dit moment actief als filter? */
+  const activeKpi: string =
+    showVervallen                       ? 'vervallen'
+    : filterStatus === ''               ? 'actief'
+    : filterStatus === 'Vrijgegeven'    ? 'vrijgegeven'
+    : filterStatus === 'Goedgekeurd'    ? 'goedgekeurd'
+    : filterStatus === 'Ter controle'   ? 'ter_controle'
+    : filterStatus === ISSUE_FILTER     ? 'issue'
+    : '';   /* dropdown op een andere status → geen kaart gemarkeerd */
+
+  /* Klik op een KPI-kaart: zet het bijbehorende filter, of schakel terug naar 'Actief'. */
+  const selectKpi = (card: string) => {
+    if (card === 'actief')    { setFilterStatus(''); setShowVervallen(false); return; }
+    if (card === 'vervallen') { setFilterStatus(''); setShowVervallen(v => !v); return; }
+    const map: Record<string, string> = {
+      vrijgegeven: 'Vrijgegeven', goedgekeurd: 'Goedgekeurd',
+      ter_controle: 'Ter controle', issue: ISSUE_FILTER,
+    };
+    const target = map[card];
+    setShowVervallen(false);
+    setFilterStatus(prev => prev === target ? '' : target);
+  };
+
   const rows = useMemo(() => {
     let r = data.filter(d => {
       if (!showVervallen && d.vervallen) return false;
@@ -436,7 +461,11 @@ export default function BoringenPage() {
       if (filterType    && d.type_boring !== filterType) return false;
       if (filterKlasse  && d.klasse !== filterKlasse) return false;
       if (filterAannemer && d.aannemer !== filterAannemer) return false;
-      if (filterStatus  && d.status_ontwerp !== filterStatus) return false;
+      if (filterStatus) {
+        if (filterStatus === ISSUE_FILTER) {
+          if (!['Issue', 'Vertraagd'].includes(d.status_ontwerp ?? '')) return false;
+        } else if (d.status_ontwerp !== filterStatus) return false;
+      }
       if (search) {
         const q = search.toLowerCase();
         return [d.boring_nr, d.werkpakket_nr, d.locatie, d.aannemer, d.bundel_configuratie]
@@ -616,12 +645,12 @@ export default function BoringenPage() {
 
       {/* KPI balk */}
       <div className="stats-bar">
-        <div className="stat-card"><span className="stat-num">{stats.totaal}</span><span className="stat-label">Actief</span></div>
-        <div className="stat-card stat-G"><span className="stat-num">{stats.vrijgegeven}</span><span className="stat-label">Vrijgegeven</span></div>
-        <div className="stat-card stat-G"><span className="stat-num">{stats.goedgekeurd}</span><span className="stat-label">Goedgekeurd</span></div>
-        <div className="stat-card stat-R"><span className="stat-num">{stats.ter_controle}</span><span className="stat-label">Ter controle</span></div>
-        <div className="stat-card stat-B"><span className="stat-num">{stats.issue}</span><span className="stat-label">Issue / Vertraagd</span></div>
-        <div className="stat-card" style={{ opacity: 0.55 }}><span className="stat-num">{stats.vervallen}</span><span className="stat-label">Vervallen</span></div>
+        <button type="button" className={`stat-card stat-btn${activeKpi === 'actief' ? ' active' : ''}`} onClick={() => selectKpi('actief')}><span className="stat-num">{stats.totaal}</span><span className="stat-label">Actief</span></button>
+        <button type="button" className={`stat-card stat-btn stat-G${activeKpi === 'vrijgegeven' ? ' active' : ''}`} onClick={() => selectKpi('vrijgegeven')}><span className="stat-num">{stats.vrijgegeven}</span><span className="stat-label">Vrijgegeven</span></button>
+        <button type="button" className={`stat-card stat-btn stat-G${activeKpi === 'goedgekeurd' ? ' active' : ''}`} onClick={() => selectKpi('goedgekeurd')}><span className="stat-num">{stats.goedgekeurd}</span><span className="stat-label">Goedgekeurd</span></button>
+        <button type="button" className={`stat-card stat-btn stat-R${activeKpi === 'ter_controle' ? ' active' : ''}`} onClick={() => selectKpi('ter_controle')}><span className="stat-num">{stats.ter_controle}</span><span className="stat-label">Ter controle</span></button>
+        <button type="button" className={`stat-card stat-btn stat-B${activeKpi === 'issue' ? ' active' : ''}`} onClick={() => selectKpi('issue')}><span className="stat-num">{stats.issue}</span><span className="stat-label">Issue / Vertraagd</span></button>
+        <button type="button" className={`stat-card stat-btn${activeKpi === 'vervallen' ? ' active' : ''}`} style={activeKpi === 'vervallen' ? undefined : { opacity: 0.55 }} onClick={() => selectKpi('vervallen')}><span className="stat-num">{stats.vervallen}</span><span className="stat-label">Vervallen</span></button>
       </div>
 
       {/* Controls */}
