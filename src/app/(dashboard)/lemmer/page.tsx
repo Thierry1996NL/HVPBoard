@@ -159,6 +159,7 @@ interface LemmerBoring {
   raakvlak?: string;
   opmerking_extra?: string;
   vervallen?: boolean;
+  stappen?: Record<string, string>;
 }
 
 /* ── Keuzelijsten ─────────────────────────────────────────────────────────── */
@@ -172,8 +173,34 @@ const PCT_OPTS: InlineOpt[] = [
 ];
 const pctLabel = (v?: number) => v == null ? '—' : `${Math.round(v * 100)}%`;
 
-/* Voorbeeld-substappen per boring (nog niet opgeslagen — placeholder). */
-const SUBTAKEN = ['Subtaak 1', 'Subtaak 2', 'Subtaak 3'];
+/* Vaste processtappen (HDD-engineering) — substappen per boring, gegroepeerd per fase. */
+type ProcesStap = { id: string; nr: string; titel: string; wie: string; tijd: string };
+const PROCES_FASEN: { fase: string; stappen: ProcesStap[] }[] = [
+  { fase: 'Fase 0 — VO / tracé-engineering (HVP)', stappen: [
+    { id: '1', nr: '1', titel: 'Check tracé & bepalen boorlijn', wie: 'Tracé-engineer (HVP)', tijd: '3–5 wd' },
+  ] },
+  { fase: 'Gate — Overdracht tracé → boring', stappen: [
+    { id: 'G', nr: 'G', titel: 'Overdracht naar boorpartner (aanleverset 100% compleet)', wie: 'Tracé → Boor-engineer', tijd: '0,5 d' },
+  ] },
+  { fase: 'Fase 1 — DO / boor-engineering (boorpartner)', stappen: [
+    { id: '2',  nr: '2',  titel: 'Haalbaarheidsstudie HDD (go/no-go)',          wie: 'Boor-engineer',            tijd: '3–5 wd' },
+    { id: '3',  nr: '3',  titel: 'Concept boortekening',                         wie: 'Boor-engineer',            tijd: '5 wd' },
+    { id: '4',  nr: '4',  titel: 'Beslismoment sonderingen (kritiek pad)',       wie: 'Boor-engineer / PL HVP',   tijd: '+3–4 wk' },
+    { id: '5',  nr: '5',  titel: 'Concept D-GEO-berekening',                     wie: 'Boor-engineer',            tijd: '5 wd' },
+    { id: '6',  nr: '6',  titel: 'Voorlopige inrichtingstekening werkterrein',   wie: 'Boor-engineer',            tijd: '3 wd' },
+    { id: '7',  nr: '7',  titel: 'Toets concept boring',                         wie: 'Uitvoeringspartij',        tijd: '5–10 wd' },
+    { id: '8',  nr: '8',  titel: 'Schouw',                                       wie: 'Schouwteam',               tijd: '5–10 wd' },
+  ] },
+  { fase: 'Fase 2 — Definitief maken & oplevering', stappen: [
+    { id: '9',  nr: '9',  titel: 'Tekeningen aanpassen',                         wie: 'Boor-engineer',            tijd: '3 wd' },
+    { id: '10', nr: '10', titel: 'Engineering aanvullen & definitief maken',     wie: 'Boor-engineer',            tijd: '5 wd' },
+    { id: '11', nr: '11', titel: 'Akkoord definitieve boring',                   wie: 'Uitvoeringspartij',        tijd: '5–10 wd' },
+    { id: '12', nr: '12', titel: 'Definitieve oplevering (gereed voor uitvoering)', wie: 'Boor-engineer',         tijd: '1 d' },
+  ] },
+];
+const ALLE_STAPPEN: ProcesStap[] = PROCES_FASEN.flatMap(f => f.stappen);
+const STAP_STATUS = ['Niet gestart', 'Loopt', 'Gereed', 'N.v.t.'];
+const STAP_KLEUR: Record<string, string> = { 'Gereed': '#1A7F3C', 'Loopt': '#F5A623', 'N.v.t.': '#9CA3AF', 'Niet gestart': '#D1D5DB' };
 
 /* ── Kolommen (versleepbaar) ──────────────────────────────────────────────── */
 type ColId =
@@ -201,9 +228,7 @@ export default function LemmerPage() {
   const [search, setSearch]   = useState('');
   const [kpi, setKpi]         = useState<string>('actief');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const [doneSubs, setDoneSubs] = useState<Set<string>>(new Set());
   const toggleExpand = (id: string) => setExpanded(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
-  const toggleSub = (key: string) => setDoneSubs(prev => { const n = new Set(prev); if (n.has(key)) n.delete(key); else n.add(key); return n; });
   const [sortCol, setSortCol] = useState<keyof LemmerBoring | null>(null);
   const [sortDir, setSortDir] = useState(1);
 
@@ -245,6 +270,14 @@ export default function LemmerPage() {
   const saveField = async (id: string, patch: Partial<LemmerBoring>) => {
     try { await save(id, patch); } catch (e) { toast((e as Error).message, 'error'); }
   };
+
+  /* Eén processtap-status opslaan in de JSONB-kolom 'stappen' van de boring. */
+  const saveStap = async (d: LemmerBoring, stapId: string, status: string) => {
+    const next = { ...(d.stappen ?? {}) };
+    if (status) next[stapId] = status; else delete next[stapId];
+    try { await save(d.id, { stappen: next }); } catch (e) { toast((e as Error).message, 'error'); }
+  };
+  const stappenGereed = (d: LemmerBoring) => ALLE_STAPPEN.filter(s => (d.stappen ?? {})[s.id] === 'Gereed').length;
 
   /* Afgeleide status uit ontwerp % (voor de KPI-kaarten). */
   const rowStatus = (d: LemmerBoring) =>
@@ -451,10 +484,11 @@ export default function LemmerPage() {
                 return (
                   <Fragment key={d.id}>
                     <tr style={{ opacity: d.vervallen ? 0.45 : 1 }}>
-                      <td style={{ textAlign: 'center', cursor: 'pointer', color: 'var(--text-3)' }}
-                        title={isOpen ? 'Inklappen' : 'Uitklappen'}
+                      <td style={{ textAlign: 'center', cursor: 'pointer', color: 'var(--text-3)', whiteSpace: 'nowrap' }}
+                        title={isOpen ? 'Stappen inklappen' : 'Stappen uitklappen'}
                         onClick={() => toggleExpand(d.id)}>
                         <span style={{ display: 'inline-block', transition: 'transform 0.12s', transform: isOpen ? 'rotate(90deg)' : 'none', fontSize: 10 }}>▶</span>
+                        {(() => { const g = stappenGereed(d); return <span style={{ marginLeft: 5, fontSize: 9, fontWeight: 600, color: g > 0 ? '#1A7F3C' : 'var(--text-4)' }}>{g}/{ALLE_STAPPEN.length}</span>; })()}
                       </td>
                       {columnOrder.map(id => <Fragment key={id}>{columns[id].cell(d)}</Fragment>)}
                       <td onClick={e => e.stopPropagation()}>
@@ -464,19 +498,35 @@ export default function LemmerPage() {
                     {isOpen && (
                       <tr>
                         <td></td>
-                        <td colSpan={columnOrder.length + 1} style={{ padding: '6px 10px 12px 4px', background: 'var(--bg)' }}>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                            {SUBTAKEN.map((naam, i) => {
-                              const key = `${d.id}-${i}`;
-                              const done = doneSubs.has(key);
-                              return (
-                                <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12, cursor: 'pointer', padding: '4px 10px', borderRadius: 6, background: 'var(--surface)', border: '0.5px solid var(--border)', maxWidth: 380 }}>
-                                  <input type="checkbox" checked={done} onChange={() => toggleSub(key)} style={{ width: 14, height: 14 }} />
-                                  <span style={{ textDecoration: done ? 'line-through' : 'none', color: done ? 'var(--text-4)' : 'var(--text-2)' }}>{naam}</span>
-                                  <span style={{ marginLeft: 'auto', fontSize: 10, fontWeight: 600, color: done ? '#1A7F3C' : 'var(--text-4)' }}>{done ? '✓ Klaar' : 'Open'}</span>
-                                </label>
-                              );
-                            })}
+                        <td colSpan={columnOrder.length + 1} style={{ padding: '8px 10px 16px 8px', background: 'var(--bg)' }}>
+                          <div style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 8 }}>
+                            Engineering-stappen — <strong style={{ color: 'var(--text-2)' }}>{stappenGereed(d)} van {ALLE_STAPPEN.length}</strong> gereed
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxWidth: 720 }}>
+                            {PROCES_FASEN.map(f => (
+                              <div key={f.fase}>
+                                <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--accent)', marginBottom: 4 }}>{f.fase}</div>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                                  {f.stappen.map(s => {
+                                    const cur = (d.stappen ?? {})[s.id] ?? '';
+                                    const dot = STAP_KLEUR[cur] ?? '#D1D5DB';
+                                    return (
+                                      <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '5px 10px', borderRadius: 6, background: 'var(--surface)', border: '0.5px solid var(--border)' }}>
+                                        <span style={{ flexShrink: 0, width: 20, height: 20, borderRadius: '50%', background: 'var(--surface3)', color: 'var(--text-2)', fontSize: 10, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{s.nr}</span>
+                                        <span style={{ flexShrink: 0, width: 9, height: 9, borderRadius: '50%', background: dot }} />
+                                        <span style={{ fontSize: 12, color: 'var(--text-2)', fontWeight: 500 }}>{s.titel}</span>
+                                        <span style={{ fontSize: 10, color: 'var(--text-4)' }}>· {s.wie} · {s.tijd}</span>
+                                        <select className="inline-edit" style={{ marginLeft: 'auto', width: 'auto', minWidth: 110, cursor: 'pointer' }}
+                                          value={cur} onChange={e => saveStap(d, s.id, e.target.value)}>
+                                          <option value="">—</option>
+                                          {STAP_STATUS.map(st => <option key={st} value={st}>{st}</option>)}
+                                        </select>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            ))}
                           </div>
                         </td>
                       </tr>
