@@ -159,7 +159,7 @@ interface LemmerBoring {
   raakvlak?: string;
   opmerking_extra?: string;
   vervallen?: boolean;
-  stappen?: Record<string, string>;
+  stappen?: Record<string, StapData>;
 }
 
 /* ── Keuzelijsten ─────────────────────────────────────────────────────────── */
@@ -201,6 +201,10 @@ const PROCES_FASEN: { fase: string; stappen: ProcesStap[] }[] = [
 const ALLE_STAPPEN: ProcesStap[] = PROCES_FASEN.flatMap(f => f.stappen);
 const STAP_STATUS = ['Niet gestart', 'Loopt', 'Gereed', 'N.v.t.'];
 const STAP_KLEUR: Record<string, string> = { 'Gereed': '#1A7F3C', 'Loopt': '#F5A623', 'N.v.t.': '#9CA3AF', 'Niet gestart': '#D1D5DB' };
+/* Per stap, per boring: status + eigenaar + plandatum + deadline + afgerond. */
+type StapData = { status?: string; eigenaar?: string; plandatum?: string; deadline?: string; afgerond?: boolean };
+const subTh: React.CSSProperties = { textAlign: 'left', padding: '2px 8px', fontWeight: 600, whiteSpace: 'nowrap', fontSize: 10, color: 'var(--text-4)', textTransform: 'uppercase', letterSpacing: '0.04em' };
+const subTd: React.CSSProperties = { padding: '3px 8px', verticalAlign: 'middle' };
 
 /* ── Kolommen (versleepbaar) ──────────────────────────────────────────────── */
 type ColId =
@@ -271,13 +275,19 @@ export default function LemmerPage() {
     try { await save(id, patch); } catch (e) { toast((e as Error).message, 'error'); }
   };
 
-  /* Eén processtap-status opslaan in de JSONB-kolom 'stappen' van de boring. */
-  const saveStap = async (d: LemmerBoring, stapId: string, status: string) => {
-    const next = { ...(d.stappen ?? {}) };
-    if (status) next[stapId] = status; else delete next[stapId];
+  /* Lees de data van één stap (verdraagt oude opslag waarin alleen een status-string stond). */
+  const getStap = (d: LemmerBoring, id: string): StapData => {
+    const raw = (d.stappen ?? {})[id] as StapData | string | undefined;
+    return typeof raw === 'string' ? { status: raw } : (raw ?? {});
+  };
+  /* Eén veld van één stap opslaan in de JSONB-kolom 'stappen'. */
+  const saveStapVeld = async (d: LemmerBoring, id: string, patch: Partial<StapData>) => {
+    const next: Record<string, StapData> = { ...(d.stappen ?? {}) };
+    next[id] = { ...getStap(d, id), ...patch };
     try { await save(d.id, { stappen: next }); } catch (e) { toast((e as Error).message, 'error'); }
   };
-  const stappenGereed = (d: LemmerBoring) => ALLE_STAPPEN.filter(s => (d.stappen ?? {})[s.id] === 'Gereed').length;
+  const stapDone = (sd: StapData) => sd.afgerond === true || sd.status === 'Gereed';
+  const stappenGereed = (d: LemmerBoring) => ALLE_STAPPEN.filter(s => stapDone(getStap(d, s.id))).length;
 
   /* Afgeleide status uit ontwerp % (voor de KPI-kaarten). */
   const rowStatus = (d: LemmerBoring) =>
@@ -499,35 +509,86 @@ export default function LemmerPage() {
                       <tr>
                         <td></td>
                         <td colSpan={columnOrder.length + 1} style={{ padding: '8px 10px 16px 8px', background: 'var(--bg)' }}>
-                          <div style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 8 }}>
+                          <div style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 6 }}>
                             Engineering-stappen — <strong style={{ color: 'var(--text-2)' }}>{stappenGereed(d)} van {ALLE_STAPPEN.length}</strong> gereed
                           </div>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxWidth: 720 }}>
-                            {PROCES_FASEN.map(f => (
-                              <div key={f.fase}>
-                                <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--accent)', marginBottom: 4 }}>{f.fase}</div>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                          <table style={{ borderCollapse: 'collapse', maxWidth: 1180 }}>
+                            <thead>
+                              <tr>
+                                <th style={subTh}>Stap</th>
+                                <th style={subTh}>Status</th>
+                                <th style={subTh}>Eigenaar</th>
+                                <th style={subTh}>Plandatum</th>
+                                <th style={subTh}>Deadline</th>
+                                <th style={subTh}>Weken resterend</th>
+                                <th style={{ ...subTh, textAlign: 'center' }}>Afgerond</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {PROCES_FASEN.map(f => (
+                                <Fragment key={f.fase}>
+                                  <tr><td colSpan={7} style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--accent)', padding: '9px 8px 3px' }}>{f.fase}</td></tr>
                                   {f.stappen.map(s => {
-                                    const cur = (d.stappen ?? {})[s.id] ?? '';
-                                    const dot = STAP_KLEUR[cur] ?? '#D1D5DB';
+                                    const sd = getStap(d, s.id);
+                                    const dot = STAP_KLEUR[sd.status ?? ''] ?? '#D1D5DB';
+                                    const wk = (sd.deadline && !sd.afgerond)
+                                      ? Math.round((new Date(sd.deadline).getTime() - Date.now()) / (1000 * 60 * 60 * 24 * 7))
+                                      : null;
                                     return (
-                                      <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '5px 10px', borderRadius: 6, background: 'var(--surface)', border: '0.5px solid var(--border)' }}>
-                                        <span style={{ flexShrink: 0, width: 20, height: 20, borderRadius: '50%', background: 'var(--surface3)', color: 'var(--text-2)', fontSize: 10, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{s.nr}</span>
-                                        <span style={{ flexShrink: 0, width: 9, height: 9, borderRadius: '50%', background: dot }} />
-                                        <span style={{ fontSize: 12, color: 'var(--text-2)', fontWeight: 500 }}>{s.titel}</span>
-                                        <span style={{ fontSize: 10, color: 'var(--text-4)' }}>· {s.wie} · {s.tijd}</span>
-                                        <select className="inline-edit" style={{ marginLeft: 'auto', width: 'auto', minWidth: 110, cursor: 'pointer' }}
-                                          value={cur} onChange={e => saveStap(d, s.id, e.target.value)}>
-                                          <option value="">—</option>
-                                          {STAP_STATUS.map(st => <option key={st} value={st}>{st}</option>)}
-                                        </select>
-                                      </div>
+                                      <tr key={s.id} style={{ borderTop: '0.5px solid var(--border)', background: 'var(--surface)' }}>
+                                        <td style={{ ...subTd, minWidth: 320 }}>
+                                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                            <span style={{ flexShrink: 0, width: 20, height: 20, borderRadius: '50%', background: 'var(--surface3)', color: 'var(--text-2)', fontSize: 10, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{s.nr}</span>
+                                            <span style={{ flexShrink: 0, width: 9, height: 9, borderRadius: '50%', background: dot }} />
+                                            <span style={{ fontSize: 12, color: 'var(--text-2)', fontWeight: 500, whiteSpace: 'nowrap' }}>{s.titel}</span>
+                                            <span style={{ fontSize: 10, color: 'var(--text-4)', whiteSpace: 'nowrap' }}>· {s.wie} · {s.tijd}</span>
+                                          </div>
+                                        </td>
+                                        <td style={subTd}>
+                                          <select className="inline-edit" style={{ minWidth: 104, cursor: 'pointer' }}
+                                            value={sd.status ?? ''} onChange={e => saveStapVeld(d, s.id, { status: e.target.value || undefined })}>
+                                            <option value="">—</option>
+                                            {STAP_STATUS.map(st => <option key={st} value={st}>{st}</option>)}
+                                          </select>
+                                        </td>
+                                        <td style={subTd}>
+                                          <input className="inline-edit" type="text" style={{ minWidth: 130 }} placeholder={s.wie}
+                                            key={`${s.id}-eig-${sd.eigenaar ?? ''}`} defaultValue={sd.eigenaar ?? ''}
+                                            onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                                            onBlur={e => { const v = e.target.value.trim(); if (v !== (sd.eigenaar ?? '')) saveStapVeld(d, s.id, { eigenaar: v || undefined }); }} />
+                                        </td>
+                                        <td style={subTd}>
+                                          <input className="inline-edit" type="date" style={{ minWidth: 120, cursor: 'pointer' }} value={sd.plandatum ?? ''}
+                                            onChange={e => saveStapVeld(d, s.id, { plandatum: e.target.value || undefined })}
+                                            onClick={e => { try { (e.currentTarget as HTMLInputElement & { showPicker?: () => void }).showPicker?.(); } catch { /* */ } }} />
+                                        </td>
+                                        <td style={subTd}>
+                                          <input className="inline-edit" type="date" style={{ minWidth: 120, cursor: 'pointer' }} value={sd.deadline ?? ''}
+                                            onChange={e => saveStapVeld(d, s.id, { deadline: e.target.value || undefined })}
+                                            onClick={e => { try { (e.currentTarget as HTMLInputElement & { showPicker?: () => void }).showPicker?.(); } catch { /* */ } }} />
+                                        </td>
+                                        <td style={{ ...subTd, whiteSpace: 'nowrap' }}>
+                                          {sd.afgerond
+                                            ? <span className="wk-chip wk-ok">afgerond</span>
+                                            : wk === null
+                                              ? <span style={{ color: 'var(--text-4)', fontSize: 11 }}>—</span>
+                                              : wk < 0
+                                                ? <span className="wk-chip wk-warn">{Math.abs(wk)}w te laat</span>
+                                                : wk <= 4
+                                                  ? <span className="wk-chip wk-soon">{wk}w</span>
+                                                  : <span className="wk-chip wk-ok">{wk}w</span>}
+                                        </td>
+                                        <td style={{ ...subTd, textAlign: 'center' }}>
+                                          <input type="checkbox" checked={!!sd.afgerond} style={{ width: 15, height: 15, cursor: 'pointer' }}
+                                            onChange={e => saveStapVeld(d, s.id, { afgerond: e.target.checked })} />
+                                        </td>
+                                      </tr>
                                     );
                                   })}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
+                                </Fragment>
+                              ))}
+                            </tbody>
+                          </table>
                         </td>
                       </tr>
                     )}
