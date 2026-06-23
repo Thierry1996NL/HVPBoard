@@ -172,6 +172,9 @@ const PCT_OPTS: InlineOpt[] = [
 ];
 const pctLabel = (v?: number) => v == null ? '—' : `${Math.round(v * 100)}%`;
 
+/* Voorbeeld-substappen per boring (nog niet opgeslagen — placeholder). */
+const SUBTAKEN = ['Subtaak 1', 'Subtaak 2', 'Subtaak 3'];
+
 /* ── Kolommen (versleepbaar) ──────────────────────────────────────────────── */
 type ColId =
   | 'boring_nr' | 'werkpakket_nr' | 'locatie' | 'lengte_m' | 'type_boring' | 'aannemer' | 'klasse'
@@ -197,6 +200,10 @@ export default function LemmerPage() {
 
   const [search, setSearch]   = useState('');
   const [kpi, setKpi]         = useState<string>('actief');
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [doneSubs, setDoneSubs] = useState<Set<string>>(new Set());
+  const toggleExpand = (id: string) => setExpanded(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const toggleSub = (key: string) => setDoneSubs(prev => { const n = new Set(prev); if (n.has(key)) n.delete(key); else n.add(key); return n; });
   const [sortCol, setSortCol] = useState<keyof LemmerBoring | null>(null);
   const [sortDir, setSortDir] = useState(1);
 
@@ -416,6 +423,7 @@ export default function LemmerPage() {
           <table className="data-table">
             <thead>
               <tr>
+                <th style={{ width: 30 }}></th>
                 {columnOrder.map(id => {
                   const col = columns[id];
                   const sortable = !!col.sortKey;
@@ -437,15 +445,45 @@ export default function LemmerPage() {
             </thead>
             <tbody>
               {rows.length === 0 ? (
-                <tr><td colSpan={columnOrder.length + 1}><div className="empty-state"><strong>Geen boringen gevonden</strong>Pas de filters aan.</div></td></tr>
-              ) : rows.map(d => (
-                <tr key={d.id} style={{ opacity: d.vervallen ? 0.45 : 1 }}>
-                  {columnOrder.map(id => <Fragment key={id}>{columns[id].cell(d)}</Fragment>)}
-                  <td onClick={e => e.stopPropagation()}>
-                    <button className="btn" style={{ fontSize: 11, padding: '2px 8px' }} onClick={() => openEdit(d.id)}>✎</button>
-                  </td>
-                </tr>
-              ))}
+                <tr><td colSpan={columnOrder.length + 2}><div className="empty-state"><strong>Geen boringen gevonden</strong>Pas de filters aan.</div></td></tr>
+              ) : rows.map(d => {
+                const isOpen = expanded.has(d.id);
+                return (
+                  <Fragment key={d.id}>
+                    <tr style={{ opacity: d.vervallen ? 0.45 : 1 }}>
+                      <td style={{ textAlign: 'center', cursor: 'pointer', color: 'var(--text-3)' }}
+                        title={isOpen ? 'Inklappen' : 'Uitklappen'}
+                        onClick={() => toggleExpand(d.id)}>
+                        <span style={{ display: 'inline-block', transition: 'transform 0.12s', transform: isOpen ? 'rotate(90deg)' : 'none', fontSize: 10 }}>▶</span>
+                      </td>
+                      {columnOrder.map(id => <Fragment key={id}>{columns[id].cell(d)}</Fragment>)}
+                      <td onClick={e => e.stopPropagation()}>
+                        <button className="btn" style={{ fontSize: 11, padding: '2px 8px' }} onClick={() => openEdit(d.id)}>✎</button>
+                      </td>
+                    </tr>
+                    {isOpen && (
+                      <tr>
+                        <td></td>
+                        <td colSpan={columnOrder.length + 1} style={{ padding: '6px 10px 12px 4px', background: 'var(--bg)' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                            {SUBTAKEN.map((naam, i) => {
+                              const key = `${d.id}-${i}`;
+                              const done = doneSubs.has(key);
+                              return (
+                                <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12, cursor: 'pointer', padding: '4px 10px', borderRadius: 6, background: 'var(--surface)', border: '0.5px solid var(--border)', maxWidth: 380 }}>
+                                  <input type="checkbox" checked={done} onChange={() => toggleSub(key)} style={{ width: 14, height: 14 }} />
+                                  <span style={{ textDecoration: done ? 'line-through' : 'none', color: done ? 'var(--text-4)' : 'var(--text-2)' }}>{naam}</span>
+                                  <span style={{ marginLeft: 'auto', fontSize: 10, fontWeight: 600, color: done ? '#1A7F3C' : 'var(--text-4)' }}>{done ? '✓ Klaar' : 'Open'}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                );
+              })}
             </tbody>
           </table>
         </div>
