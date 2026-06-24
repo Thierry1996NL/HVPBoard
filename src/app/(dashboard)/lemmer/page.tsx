@@ -233,6 +233,8 @@ export default function LemmerPage() {
   const [kpi, setKpi]         = useState<string>('actief');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const toggleExpand = (id: string) => setExpanded(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const [expandedFases, setExpandedFases] = useState<Set<string>>(new Set());
+  const toggleFase = (key: string) => setExpandedFases(prev => { const n = new Set(prev); if (n.has(key)) n.delete(key); else n.add(key); return n; });
   const [sortCol, setSortCol] = useState<keyof LemmerBoring | null>(null);
   const [sortDir, setSortDir] = useState(1);
 
@@ -525,10 +527,24 @@ export default function LemmerPage() {
                               </tr>
                             </thead>
                             <tbody>
-                              {PROCES_FASEN.map(f => (
+                              {PROCES_FASEN.map((f, fi) => {
+                                const faseKey = `${d.id}|${fi}`;
+                                const faseOpen = expandedFases.has(faseKey);
+                                const total = f.stappen.length;
+                                const klaar = f.stappen.filter(s => stapDone(getStap(d, s.id))).length;
+                                const compleet = klaar === total && total > 0;
+                                return (
                                 <Fragment key={f.fase}>
-                                  <tr><td colSpan={7} style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--accent)', padding: '9px 8px 3px' }}>{f.fase}</td></tr>
-                                  {f.stappen.map(s => {
+                                  <tr style={{ cursor: 'pointer', background: 'var(--surface3)', borderTop: '0.5px solid var(--border)' }} onClick={() => toggleFase(faseKey)}>
+                                    <td colSpan={7} style={{ padding: '7px 8px' }}>
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                        <span style={{ display: 'inline-block', transition: 'transform 0.12s', transform: faseOpen ? 'rotate(90deg)' : 'none', fontSize: 9, color: 'var(--text-3)' }}>▶</span>
+                                        <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--accent)' }}>{f.fase}</span>
+                                        <span style={{ marginLeft: 4, fontSize: 10, fontWeight: 700, padding: '1px 8px', borderRadius: 20, background: compleet ? 'var(--g-bg)' : 'var(--surface)', color: compleet ? 'var(--g-fg)' : 'var(--text-3)', border: '0.5px solid var(--border)' }}>{klaar}/{total}</span>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                  {faseOpen && f.stappen.map(s => {
                                     const sd = getStap(d, s.id);
                                     const dot = STAP_KLEUR[sd.status ?? ''] ?? '#D1D5DB';
                                     const wk = (sd.deadline && !sd.afgerond)
@@ -586,7 +602,8 @@ export default function LemmerPage() {
                                     );
                                   })}
                                 </Fragment>
-                              ))}
+                                );
+                              })}
                             </tbody>
                           </table>
                         </td>
