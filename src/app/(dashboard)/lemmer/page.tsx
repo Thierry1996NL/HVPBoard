@@ -393,22 +393,31 @@ export default function LemmerPage() {
   /* Afgeleide status uit ontwerp % (voor de KPI-kaarten). */
   const rowStatus = (d: LemmerBoring) =>
     d.vervallen ? 'vervallen' : d.ontwerp_pct === 1 ? 'gereed' : (d.ontwerp_pct ?? 0) > 0 ? 'loopt' : 'niet';
+  /* Stoplicht-status op basis van de substap-deadlines:
+     rood = een openstaande stap is over datum, geel = deadline binnen 4 weken, anders groen. */
+  const boringHealth = (d: LemmerBoring): 'groen' | 'geel' | 'rood' => {
+    let geel = false;
+    for (const s of ALLE_STAPPEN) {
+      const sd = getStap(d, s.id);
+      if (stapDone(sd) || sd.status === 'N.v.t.' || !sd.deadline) continue;
+      const wk = (new Date(sd.deadline).getTime() - Date.now()) / MS_WEEK;
+      if (wk < 0) return 'rood';
+      if (wk <= 4) geel = true;
+    }
+    return geel ? 'geel' : 'groen';
+  };
 
   const stats = useMemo(() => {
     const a = data.filter(d => !d.vervallen);
-    return {
-      totaal: a.length,
-      gereed: a.filter(d => d.ontwerp_pct === 1).length,
-      loopt:  a.filter(d => (d.ontwerp_pct ?? 0) > 0 && d.ontwerp_pct !== 1).length,
-      niet:   a.filter(d => !d.ontwerp_pct).length,
-      vervallen: data.filter(d => d.vervallen).length,
-    };
+    let groen = 0, geel = 0, rood = 0;
+    for (const d of a) { const h = boringHealth(d); if (h === 'rood') rood++; else if (h === 'geel') geel++; else groen++; }
+    return { totaal: a.length, groen, geel, rood, vervallen: data.filter(d => d.vervallen).length };
   }, [data]);
 
   const rows = useMemo(() => {
     let r = data.filter(d => {
       if (kpi === 'vervallen') { if (!d.vervallen) return false; }
-      else { if (d.vervallen) return false; if (kpi !== 'actief' && rowStatus(d) !== kpi) return false; }
+      else { if (d.vervallen) return false; if (kpi !== 'actief' && boringHealth(d) !== kpi) return false; }
       if (search) {
         const q = search.toLowerCase();
         return [d.boring_nr, d.locatie, d.werkpakket_nr, d.aannemer, d.type_boring, d.prioritering].some(v => (v ?? '').toLowerCase().includes(q));
@@ -607,9 +616,9 @@ export default function LemmerPage() {
 
   const kpiCards: { id: string; num: number; label: string; cls?: string }[] = [
     { id: 'actief',    num: stats.totaal,    label: 'Boringen' },
-    { id: 'gereed',    num: stats.gereed,    label: 'Gereed', cls: 'stat-G' },
-    { id: 'loopt',     num: stats.loopt,     label: 'Loopt', cls: 'stat-B' },
-    { id: 'niet',      num: stats.niet,      label: 'Niet gestart' },
+    { id: 'groen',     num: stats.groen,     label: 'Op schema', cls: 'stat-G' },
+    { id: 'geel',      num: stats.geel,      label: 'Aandacht',  cls: 'stat-A' },
+    { id: 'rood',      num: stats.rood,      label: 'Te laat',   cls: 'stat-R' },
     { id: 'vervallen', num: stats.vervallen, label: 'Vervallen' },
   ];
 
@@ -649,6 +658,9 @@ export default function LemmerPage() {
         .lem-colpicker-row:hover { background: var(--surface3); }
         .lem-colpicker-row input { accent-color: var(--accent); }
         .lem-person-row:hover { background: var(--n-mid); }
+        .stat-card.stat-G .stat-num { color: var(--g-fg); }
+        .stat-card.stat-A .stat-num { color: var(--r-fg); }
+        .stat-card.stat-R .stat-num { color: var(--b-fg); }
       `}</style>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 4 }}>
         <h1 style={{ fontSize: 20, fontWeight: 600, margin: 0 }}>Lemmer</h1>
