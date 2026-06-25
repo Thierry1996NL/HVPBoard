@@ -211,21 +211,17 @@ type ColId =
   | 'boring_nr' | 'werkpakket_nr' | 'locatie' | 'lengte_m' | 'type_boring' | 'aannemer' | 'klasse'
   | 'prioritering' | 'oplevering_toolgate' | 'projectfase' | 'engineeringsfase'
   | 'fase0' | 'faseG' | 'fase1' | 'fase2'
-  | 'aanlevering_compleet' | 'ter_controle_uitvoering' | 'retour_uitvoering' | 'schouw_uitgevoerd'
-  | 'opmerkingen_uitvoering' | 'planning_apds' | 'ontwerp_pct' | 'tek_pct' | 'status_werkterrein'
-  | 'status_berekening' | 'sondering_nr' | 'sondering_aangevraagd' | 'sondering_retour'
+  | 'planning_apds'
   | 'bundel_configuratie' | 'raakvlak' | 'opmerking_extra' | 'case_nr';
 
 const DEFAULT_COL_ORDER: ColId[] = [
   'boring_nr', 'werkpakket_nr', 'locatie', 'lengte_m', 'type_boring', 'aannemer', 'klasse',
   'prioritering', 'oplevering_toolgate', 'projectfase', 'engineeringsfase',
   'fase0', 'faseG', 'fase1', 'fase2',
-  'aanlevering_compleet', 'ter_controle_uitvoering', 'retour_uitvoering', 'schouw_uitgevoerd',
-  'opmerkingen_uitvoering', 'planning_apds', 'ontwerp_pct', 'tek_pct', 'status_werkterrein',
-  'status_berekening', 'sondering_nr', 'sondering_aangevraagd', 'sondering_retour',
+  'planning_apds',
   'bundel_configuratie', 'raakvlak', 'opmerking_extra', 'case_nr',
 ];
-const COL_ORDER_KEY = 'hvp_lemmer_colorder_v2';
+const COL_ORDER_KEY = 'hvp_lemmer_colorder_v3';
 /* Koppeling fase-kolom → index in PROCES_FASEN */
 const FASE_COL: Record<string, number> = { fase0: 0, faseG: 1, fase1: 2, fase2: 3 };
 
@@ -438,19 +434,7 @@ export default function LemmerPage() {
     faseG: faseCol('Gate', 'faseG'),
     fase1: faseCol('Fase 1', 'fase1'),
     fase2: faseCol('Fase 2', 'fase2'),
-    aanlevering_compleet: dateCol('Aanlevering compleet', 'aanlevering_compleet'),
-    ter_controle_uitvoering: dateCol('Ter controle uitvoering', 'ter_controle_uitvoering'),
-    retour_uitvoering: dateCol('Retour ontvangen', 'retour_uitvoering'),
-    schouw_uitgevoerd: dateCol('Schouw uitgevoerd', 'schouw_uitgevoerd'),
-    opmerkingen_uitvoering: dateCol('Opm. uitvoering verwerkt', 'opmerkingen_uitvoering'),
     planning_apds: dateCol("Planning APD's", 'planning_apds'),
-    ontwerp_pct: pctCol('Ontwerp %', 'ontwerp_pct'),
-    tek_pct: pctCol('Tek %', 'tek_pct'),
-    status_werkterrein: statusCol('Werkterrein', 'status_werkterrein'),
-    status_berekening: statusCol('Berekening', 'status_berekening'),
-    sondering_nr: textCol('Sondering nr.', 'sondering_nr'),
-    sondering_aangevraagd: textCol('Sondering aangevraagd', 'sondering_aangevraagd'),
-    sondering_retour: textCol('Sondering retour', 'sondering_retour'),
     bundel_configuratie: textCol('Bundel', 'bundel_configuratie'),
     raakvlak: textCol('Raakvlak', 'raakvlak', { sort: false, wide: true }),
     opmerking_extra: textCol('Opmerking', 'opmerking_extra', { sort: false, wide: true }),
