@@ -251,11 +251,11 @@ type ColId =
 const DEFAULT_COL_ORDER: ColId[] = [
   'boring_nr', 'werkpakket_nr', 'locatie', 'lengte_m', 'type_boring', 'klasse', 'aannemer',
   'prioritering', 'oplevering_toolgate', 'projectfase', 'engineeringsfase',
-  'startdatum', 'fase0', 'faseG', 'fase1', 'fase2', 'einddatum', 'eind_weken', 'actieve_stap',
+  'startdatum', 'fase0', 'faseG', 'fase1', 'fase2', 'einddatum', 'eind_weken', 'actieve_stap', 'opmerking_extra',
   'aanlevering_compleet', 'ter_controle_uitvoering', 'retour_uitvoering', 'schouw_uitgevoerd',
   'opmerkingen_uitvoering', 'planning_apds', 'ontwerp_pct', 'tek_pct', 'status_werkterrein',
   'status_berekening', 'sondering_nr', 'sondering_aangevraagd', 'sondering_retour',
-  'bundel_configuratie', 'raakvlak', 'opmerking_extra', 'case_nr',
+  'bundel_configuratie', 'raakvlak', 'case_nr',
 ];
 /* Standaard verborgen kolommen (compacte weergave) — toonbaar via de kolomkiezer of de knop Uitklappen. */
 const DEFAULT_HIDDEN: ColId[] = [
@@ -263,10 +263,10 @@ const DEFAULT_HIDDEN: ColId[] = [
   'aanlevering_compleet', 'ter_controle_uitvoering', 'retour_uitvoering', 'schouw_uitgevoerd',
   'opmerkingen_uitvoering', 'ontwerp_pct', 'tek_pct', 'status_werkterrein',
   'status_berekening', 'sondering_nr', 'sondering_aangevraagd', 'sondering_retour',
-  'raakvlak', 'opmerking_extra', 'case_nr', 'bundel_configuratie',
+  'raakvlak', 'case_nr', 'bundel_configuratie',
 ];
-const COL_ORDER_KEY = 'hvp_lemmer_colorder_v7';
-const HIDDEN_KEY = 'hvp_lemmer_hidden_v5';
+const COL_ORDER_KEY = 'hvp_lemmer_colorder_v8';
+const HIDDEN_KEY = 'hvp_lemmer_hidden_v6';
 /* Koppeling fase-kolom → index in PROCES_FASEN */
 const FASE_COL: Record<string, number> = { fase0: 0, faseG: 1, fase1: 2, fase2: 3 };
 /* Berekende kolommen zonder eigen databaseveld — niet filterbaar via de header. */
@@ -274,7 +274,14 @@ const NIET_FILTERBAAR: ColId[] = ['fase0', 'faseG', 'fase1', 'fase2', 'einddatum
 
 export default function LemmerPage() {
   const toast = useToast();
-  const { data, loading, save, remove, personen, addPersoon, removePersoon } = useLemmerData();
+  const { data, loading, save, remove, refresh, personen, addPersoon, removePersoon } = useLemmerData();
+  const [opslaan, setOpslaan] = useState(false);
+  const handleOpslaan = async () => {
+    setOpslaan(true);
+    try { await refresh(); toast('✓ Alles is opgeslagen', 'success'); }
+    catch (e) { toast((e as Error).message, 'error'); }
+    finally { setOpslaan(false); }
+  };
   const [personenOpen, setPersonenOpen] = useState(false);
   const [nieuwPersoon, setNieuwPersoon] = useState('');
   const handleAddPersoon = async () => {
@@ -594,7 +601,7 @@ export default function LemmerPage() {
     sondering_retour: textCol('Sondering retour', 'sondering_retour'),
     bundel_configuratie: textCol('Bundel', 'bundel_configuratie'),
     raakvlak: textCol('Raakvlak', 'raakvlak', { sort: false, wide: true }),
-    opmerking_extra: textCol('Opmerking', 'opmerking_extra', { sort: false, wide: true }),
+    opmerking_extra: textCol('Opmerkingen', 'opmerking_extra', { sort: false, wide: true }),
     case_nr: textCol('Case nr.', 'case_nr'),
   };
 
@@ -667,6 +674,9 @@ export default function LemmerPage() {
         </button>
         <button className="btn" onClick={() => setFiltersOpen(o => !o)} style={{ fontSize: 11, ...(filtersOpen || activeFilters ? { borderColor: 'var(--accent)', color: 'var(--accent)' } : {}) }} title="Filter de rijen per kolom">
           ⌕ Filter{activeFilters ? ` (${activeFilters})` : ''}
+        </button>
+        <button className="btn" onClick={handleOpslaan} disabled={opslaan} style={{ fontSize: 11 }} title="Synchroniseren met de database (wijzigingen worden al automatisch opgeslagen)">
+          {opslaan ? '… Opslaan' : '💾 Opslaan'}
         </button>
         <div style={{ flex: 1 }} />
         <div style={{ position: 'relative' }}>
@@ -904,7 +914,7 @@ export default function LemmerPage() {
             <F label="Case nr."><input className="field-input" value={form.case_nr ?? ''} onChange={e => setForm(f => ({ ...f, case_nr: e.target.value }))} /></F>
             <F label="Vervallen"><label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginTop: 6 }}><input type="checkbox" checked={form.vervallen ?? false} onChange={e => setForm(f => ({ ...f, vervallen: e.target.checked }))} style={{ width: 15, height: 15 }} /><span style={{ fontSize: 12 }}>Ja, vervallen</span></label></F>
             <F label="Raakvlak" span><textarea className="field-input" rows={2} value={form.raakvlak ?? ''} onChange={e => setForm(f => ({ ...f, raakvlak: e.target.value }))} style={{ resize: 'vertical' }} /></F>
-            <F label="Opmerking" span><textarea className="field-input" rows={2} value={form.opmerking_extra ?? ''} onChange={e => setForm(f => ({ ...f, opmerking_extra: e.target.value }))} style={{ resize: 'vertical' }} /></F>
+            <F label="Opmerkingen" span><textarea className="field-input" rows={2} value={form.opmerking_extra ?? ''} onChange={e => setForm(f => ({ ...f, opmerking_extra: e.target.value }))} style={{ resize: 'vertical' }} /></F>
           </div>
         </Modal>
       )}
@@ -999,5 +1009,11 @@ function useLemmerData() {
     if (error) throw new Error(error.message);
     setData(prev => prev.filter(r => r.id !== id));
   }, []);
-  return { data, loading, save, remove, reload: load, personen, addPersoon, removePersoon };
+  const refresh = useCallback(async () => {
+    const supabase = createClient();
+    const { data: rows, error } = await supabase.from('lemmer').select('*').order('created_at', { ascending: true });
+    if (error) throw new Error(error.message);
+    setData((rows ?? []) as unknown as LemmerBoring[]);
+  }, []);
+  return { data, loading, save, remove, reload: load, refresh, personen, addPersoon, removePersoon };
 }
