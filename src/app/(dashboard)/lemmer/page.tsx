@@ -218,6 +218,20 @@ function einddatumVan(start?: string): string | null {
   return d.toISOString().slice(0, 10);
 }
 const MS_WEEK = 1000 * 60 * 60 * 24 * 7;
+/* Genereert plandatum + deadline per stap door de doorlooptijden sequentieel
+   vanaf de startdatum achter elkaar te zetten. */
+function genereerStapDatums(start: string): Record<string, { plandatum: string; deadline: string }> {
+  const out: Record<string, { plandatum: string; deadline: string }> = {};
+  const cursor = new Date(start);
+  if (isNaN(cursor.getTime())) return out;
+  for (const s of ALLE_STAPPEN) {
+    const plan = cursor.toISOString().slice(0, 10);
+    const dagen = Math.max(1, Math.round(duurNaarWeken(s.tijd) * 7));
+    cursor.setDate(cursor.getDate() + dagen);
+    out[s.id] = { plandatum: plan, deadline: cursor.toISOString().slice(0, 10) };
+  }
+  return out;
+}
 const STAP_STATUS = ['Niet gestart', 'Loopt', 'Gereed', 'N.v.t.'];
 const STAP_KLEUR: Record<string, string> = { 'Gereed': 'var(--g-fg)', 'Loopt': 'var(--r-fg)', 'N.v.t.': 'var(--text-4)', 'Niet gestart': 'var(--border-md)' };
 /* Per stap, per boring: status + eigenaar + plandatum + deadline + afgerond. */
@@ -345,6 +359,15 @@ export default function LemmerPage() {
     next[id] = { ...getStap(d, id), ...patch };
     try { await save(d.id, { stappen: next }); } catch (e) { toast((e as Error).message, 'error'); }
   };
+  /* Startdatum opslaan én meteen plandatum + deadline van alle stappen doorrekenen. */
+  const setStartEnPlanning = async (d: LemmerBoring, start?: string) => {
+    if (!start) { try { await save(d.id, { startdatum: undefined }); } catch (e) { toast((e as Error).message, 'error'); } return; }
+    const datums = genereerStapDatums(start);
+    const next: Record<string, StapData> = { ...(d.stappen ?? {}) };
+    for (const id of Object.keys(datums)) next[id] = { ...getStap(d, id), ...datums[id] };
+    try { await save(d.id, { startdatum: start, stappen: next }); toast('✓ Planning doorgerekend', 'success'); }
+    catch (e) { toast((e as Error).message, 'error'); }
+  };
   const stapDone = (sd: StapData) => sd.afgerond === true || sd.status === 'Gereed';
   const stappenGereed = (d: LemmerBoring) => ALLE_STAPPEN.filter(s => stapDone(getStap(d, s.id))).length;
   /* De stap waar nu actief aan gewerkt wordt: eerst een stap met status 'Loopt',
@@ -395,7 +418,15 @@ export default function LemmerPage() {
   };
   const handleSave = async () => {
     if (!form.boring_nr?.trim()) { toast('Boor nr. is verplicht', 'error'); return; }
-    try { await save(editId, form); toast(editId ? '✓ Opgeslagen' : '✓ Toegevoegd', 'success'); setModal(false); }
+    let payload: Partial<LemmerBoring> = form;
+    const orig = editId ? data.find(x => x.id === editId) : undefined;
+    if (form.startdatum && form.startdatum !== orig?.startdatum) {
+      const datums = genereerStapDatums(form.startdatum);
+      const next: Record<string, StapData> = { ...(form.stappen ?? {}) };
+      for (const id of Object.keys(datums)) next[id] = { ...(next[id] ?? {}), ...datums[id] };
+      payload = { ...form, stappen: next };
+    }
+    try { await save(editId, payload); toast(editId ? '✓ Opgeslagen' : '✓ Toegevoegd', 'success'); setModal(false); }
     catch (e) { toast((e as Error).message, 'error'); }
   };
   const handleDelete = async () => {
@@ -491,15 +522,20 @@ export default function LemmerPage() {
     oplevering_toolgate: textCol('Oplevering Toolgate', 'oplevering_toolgate', { wide: true }),
     projectfase: textCol('Projectfase', 'projectfase'),
     engineeringsfase: textCol('Engineeringsfase', 'engineeringsfase', { wide: true }),
-    startdatum: dateCol('Startdatum', 'startdatum'),
+    startdatum: { label: 'Startdatum', sortKey: 'startdatum', cell: d => (
+      <InlineCell type="date" value={d.startdatum}
+        display={<span style={{ fontSize: 11, color: 'var(--text-3)', whiteSpace: 'nowrap' }}>{fmtDate(d.startdatum)}</span>}
+        onSave={v => setStartEnPlanning(d, (v as string | undefined) || undefined)} />
+    ) },
     fase0: faseCol('Fase 0', 'fase0'),
     faseG: faseCol('Gate', 'faseG'),
     fase1: faseCol('Fase 1', 'fase1'),
     fase2: faseCol('Fase 2', 'fase2'),
     einddatum: { label: 'Einddatum (auto)', cell: d => {
-      const e = einddatumVan(d.startdatum);
+      const deadlines = ALLE_STAPPEN.map(s => getStap(d, s.id).deadline).filter(Boolean) as string[];
+      const e = deadlines.length ? deadlines.reduce((a, b) => (a > b ? a : b)) : einddatumVan(d.startdatum);
       return <td style={{ fontSize: 11, whiteSpace: 'nowrap', color: e ? 'var(--text-2)' : 'var(--text-4)', fontWeight: e ? 500 : 400 }}
-        title={e ? `Startdatum + ${Math.round(TOTAAL_WEKEN)} wk doorlooptijd` : 'Vul eerst een startdatum in'}>{e ? fmtDate(e) : '—'}</td>;
+        title={e ? 'Laatste deadline van de stappen' : 'Vul eerst een startdatum in'}>{e ? fmtDate(e) : '—'}</td>;
     } },
     actieve_stap: { label: 'Actieve stap', cell: d => {
       const a = activeStap(d);
