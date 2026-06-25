@@ -159,6 +159,7 @@ interface LemmerBoring {
   raakvlak?: string;
   opmerking_extra?: string;
   vervallen?: boolean;
+  gereed?: boolean;
   startdatum?: string;
   stappen?: Record<string, StapData>;
 }
@@ -246,7 +247,7 @@ type ColId =
   | 'aanlevering_compleet' | 'ter_controle_uitvoering' | 'retour_uitvoering' | 'schouw_uitgevoerd'
   | 'opmerkingen_uitvoering' | 'planning_apds' | 'ontwerp_pct' | 'tek_pct' | 'status_werkterrein'
   | 'status_berekening' | 'sondering_nr' | 'sondering_aangevraagd' | 'sondering_retour'
-  | 'bundel_configuratie' | 'raakvlak' | 'opmerking_extra' | 'case_nr';
+  | 'bundel_configuratie' | 'raakvlak' | 'opmerking_extra' | 'case_nr' | 'gereed';
 
 const DEFAULT_COL_ORDER: ColId[] = [
   'boring_nr', 'werkpakket_nr', 'locatie', 'lengte_m', 'type_boring', 'klasse', 'aannemer',
@@ -255,7 +256,7 @@ const DEFAULT_COL_ORDER: ColId[] = [
   'aanlevering_compleet', 'ter_controle_uitvoering', 'retour_uitvoering', 'schouw_uitgevoerd',
   'opmerkingen_uitvoering', 'planning_apds', 'ontwerp_pct', 'tek_pct', 'status_werkterrein',
   'status_berekening', 'sondering_nr', 'sondering_aangevraagd', 'sondering_retour',
-  'bundel_configuratie', 'raakvlak', 'case_nr',
+  'bundel_configuratie', 'raakvlak', 'case_nr', 'gereed',
 ];
 /* Standaard verborgen kolommen (compacte weergave) — toonbaar via de kolomkiezer of de knop Uitklappen. */
 const DEFAULT_HIDDEN: ColId[] = [
@@ -265,12 +266,12 @@ const DEFAULT_HIDDEN: ColId[] = [
   'status_berekening', 'sondering_nr', 'sondering_aangevraagd', 'sondering_retour',
   'raakvlak', 'case_nr', 'bundel_configuratie',
 ];
-const COL_ORDER_KEY = 'hvp_lemmer_colorder_v8';
+const COL_ORDER_KEY = 'hvp_lemmer_colorder_v9';
 const HIDDEN_KEY = 'hvp_lemmer_hidden_v6';
 /* Koppeling fase-kolom → index in PROCES_FASEN */
 const FASE_COL: Record<string, number> = { fase0: 0, faseG: 1, fase1: 2, fase2: 3 };
 /* Berekende kolommen zonder eigen databaseveld — niet filterbaar via de header. */
-const NIET_FILTERBAAR: ColId[] = ['fase0', 'faseG', 'fase1', 'fase2', 'einddatum', 'eind_weken', 'actieve_stap'];
+const NIET_FILTERBAAR: ColId[] = ['fase0', 'faseG', 'fase1', 'fase2', 'einddatum', 'eind_weken', 'actieve_stap', 'gereed'];
 
 export default function LemmerPage() {
   const toast = useToast();
@@ -396,6 +397,7 @@ export default function LemmerPage() {
   /* Stoplicht-status op basis van de substap-deadlines:
      rood = een openstaande stap is over datum, geel = deadline binnen 4 weken, anders groen. */
   const boringHealth = (d: LemmerBoring): 'groen' | 'geel' | 'rood' => {
+    if (d.gereed) return 'groen';
     let geel = false;
     for (const s of ALLE_STAPPEN) {
       const sd = getStap(d, s.id);
@@ -612,6 +614,16 @@ export default function LemmerPage() {
     raakvlak: textCol('Raakvlak', 'raakvlak', { sort: false, wide: true }),
     opmerking_extra: textCol('Opmerkingen', 'opmerking_extra', { sort: false, wide: true }),
     case_nr: textCol('Case nr.', 'case_nr'),
+    gereed: { label: 'Gereed', cell: d => (
+      <td style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+        <button className="btn" onClick={() => saveField(d.id, { gereed: !d.gereed })}
+          title={d.gereed ? 'Markeer als niet gereed' : 'Markeer project als gereed'}
+          style={{ fontSize: 11, padding: '2px 12px', fontWeight: 600,
+            ...(d.gereed ? { background: 'var(--g-bg)', color: 'var(--g-fg)', borderColor: 'var(--g-mid)' } : {}) }}>
+          {d.gereed ? '✓ Ja' : 'Nee'}
+        </button>
+      </td>
+    ) },
   };
 
   const kpiCards: { id: string; num: number; label: string; cls?: string }[] = [
@@ -766,7 +778,7 @@ export default function LemmerPage() {
                 const isOpen = expanded.has(d.id);
                 return (
                   <Fragment key={d.id}>
-                    <tr style={{ opacity: d.vervallen ? 0.45 : 1 }}>
+                    <tr style={{ opacity: d.vervallen ? 0.45 : d.gereed ? 0.6 : 1, background: d.gereed ? 'var(--n-bg)' : undefined }}>
                       <td style={{ textAlign: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }}
                         title={isOpen ? 'Stappen inklappen' : 'Stappen uitklappen'}
                         onClick={() => toggleExpand(d.id)}>
@@ -925,6 +937,7 @@ export default function LemmerPage() {
             <F label="Bundel configuratie"><input className="field-input" value={form.bundel_configuratie ?? ''} onChange={e => setForm(f => ({ ...f, bundel_configuratie: e.target.value }))} /></F>
             <F label="Case nr."><input className="field-input" value={form.case_nr ?? ''} onChange={e => setForm(f => ({ ...f, case_nr: e.target.value }))} /></F>
             <F label="Vervallen"><label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginTop: 6 }}><input type="checkbox" checked={form.vervallen ?? false} onChange={e => setForm(f => ({ ...f, vervallen: e.target.checked }))} style={{ width: 15, height: 15 }} /><span style={{ fontSize: 12 }}>Ja, vervallen</span></label></F>
+            <F label="Project gereed"><label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginTop: 6 }}><input type="checkbox" checked={form.gereed ?? false} onChange={e => setForm(f => ({ ...f, gereed: e.target.checked }))} style={{ width: 15, height: 15 }} /><span style={{ fontSize: 12 }}>Ja, gereed</span></label></F>
             <F label="Raakvlak" span><textarea className="field-input" rows={2} value={form.raakvlak ?? ''} onChange={e => setForm(f => ({ ...f, raakvlak: e.target.value }))} style={{ resize: 'vertical' }} /></F>
             <F label="Opmerkingen" span><textarea className="field-input" rows={2} value={form.opmerking_extra ?? ''} onChange={e => setForm(f => ({ ...f, opmerking_extra: e.target.value }))} style={{ resize: 'vertical' }} /></F>
           </div>
