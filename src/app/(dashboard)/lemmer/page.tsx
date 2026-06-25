@@ -402,7 +402,7 @@ export default function LemmerPage() {
       if (stapDone(sd) || sd.status === 'N.v.t.' || !sd.deadline) continue;
       const wk = (new Date(sd.deadline).getTime() - Date.now()) / MS_WEEK;
       if (wk < 0) return 'rood';
-      if (wk <= 4) geel = true;
+      if (wk <= 2) geel = true;
     }
     return geel ? 'geel' : 'groen';
   };
@@ -568,7 +568,7 @@ export default function LemmerPage() {
       const wk = Math.round((new Date(e).getTime() - Date.now()) / MS_WEEK);
       return <td style={{ whiteSpace: 'nowrap' }}>
         {wk < 0 ? <span className="wk-chip wk-over">{Math.abs(wk)}w te laat</span>
-          : wk <= 4 ? <span className="wk-chip wk-warn">{wk}w</span>
+          : wk <= 2 ? <span className="wk-chip wk-warn">{wk}w</span>
             : <span className="wk-chip wk-ok">{wk}w</span>}
       </td>;
     } },
@@ -588,7 +588,7 @@ export default function LemmerPage() {
               <span>{sd.deadline ? fmtDate(sd.deadline) : 'geen deadline'}</span>
               {wk !== null && (wk < 0
                 ? <span className="wk-chip wk-over">{Math.abs(wk)}w te laat</span>
-                : wk <= 4 ? <span className="wk-chip wk-warn">{wk}w</span>
+                : wk <= 2 ? <span className="wk-chip wk-warn">{wk}w</span>
                   : <span className="wk-chip wk-ok">{wk}w</span>)}
             </div>
           </div>
@@ -858,7 +858,7 @@ export default function LemmerPage() {
                                                   ? <span style={{ color: 'var(--text-4)', fontSize: 11 }}>—</span>
                                                   : wk < 0
                                                     ? <span className="wk-chip wk-over">{Math.abs(wk)}w te laat</span>
-                                                    : wk <= 4
+                                                    : wk <= 2
                                                       ? <span className="wk-chip wk-warn">{wk}w</span>
                                                       : <span className="wk-chip wk-ok">{wk}w</span>}
                                             </td>
