@@ -38,7 +38,7 @@ const toOpts = (arr: string[], empty = true): InlineOpt[] =>
 
 function Check({ v }: { v?: boolean }) {
   return v
-    ? <span style={{ color: '#1A7F3C', fontWeight: 700, fontSize: 13 }}>✓</span>
+    ? <span style={{ color: 'var(--g-fg)', fontWeight: 700, fontSize: 13 }}>✓</span>
     : <span style={{ color: 'var(--text-4)', fontSize: 11 }}>—</span>;
 }
 
@@ -200,29 +200,38 @@ const PROCES_FASEN: { fase: string; stappen: ProcesStap[] }[] = [
 ];
 const ALLE_STAPPEN: ProcesStap[] = PROCES_FASEN.flatMap(f => f.stappen);
 const STAP_STATUS = ['Niet gestart', 'Loopt', 'Gereed', 'N.v.t.'];
-const STAP_KLEUR: Record<string, string> = { 'Gereed': '#1A7F3C', 'Loopt': '#F5A623', 'N.v.t.': '#9CA3AF', 'Niet gestart': '#D1D5DB' };
+const STAP_KLEUR: Record<string, string> = { 'Gereed': 'var(--g-fg)', 'Loopt': 'var(--r-fg)', 'N.v.t.': 'var(--text-4)', 'Niet gestart': 'var(--border-md)' };
 /* Per stap, per boring: status + eigenaar + plandatum + deadline + afgerond. */
 type StapData = { status?: string; eigenaar?: string; plandatum?: string; deadline?: string; afgerond?: boolean };
 type Persoon = { id: string; naam: string };
-const subTh: React.CSSProperties = { textAlign: 'left', padding: '2px 8px', fontWeight: 600, whiteSpace: 'nowrap', fontSize: 10, color: 'var(--text-4)', textTransform: 'uppercase', letterSpacing: '0.04em' };
-const subTd: React.CSSProperties = { padding: '3px 8px', verticalAlign: 'middle' };
 
 /* ── Kolommen (versleepbaar) ──────────────────────────────────────────────── */
 type ColId =
   | 'boring_nr' | 'werkpakket_nr' | 'locatie' | 'lengte_m' | 'type_boring' | 'aannemer' | 'klasse'
   | 'prioritering' | 'oplevering_toolgate' | 'projectfase' | 'engineeringsfase'
   | 'fase0' | 'faseG' | 'fase1' | 'fase2'
-  | 'planning_apds'
+  | 'aanlevering_compleet' | 'ter_controle_uitvoering' | 'retour_uitvoering' | 'schouw_uitgevoerd'
+  | 'opmerkingen_uitvoering' | 'planning_apds' | 'ontwerp_pct' | 'tek_pct' | 'status_werkterrein'
+  | 'status_berekening' | 'sondering_nr' | 'sondering_aangevraagd' | 'sondering_retour'
   | 'bundel_configuratie' | 'raakvlak' | 'opmerking_extra' | 'case_nr';
 
 const DEFAULT_COL_ORDER: ColId[] = [
   'boring_nr', 'werkpakket_nr', 'locatie', 'lengte_m', 'type_boring', 'aannemer', 'klasse',
   'prioritering', 'oplevering_toolgate', 'projectfase', 'engineeringsfase',
   'fase0', 'faseG', 'fase1', 'fase2',
-  'planning_apds',
+  'aanlevering_compleet', 'ter_controle_uitvoering', 'retour_uitvoering', 'schouw_uitgevoerd',
+  'opmerkingen_uitvoering', 'planning_apds', 'ontwerp_pct', 'tek_pct', 'status_werkterrein',
+  'status_berekening', 'sondering_nr', 'sondering_aangevraagd', 'sondering_retour',
   'bundel_configuratie', 'raakvlak', 'opmerking_extra', 'case_nr',
 ];
-const COL_ORDER_KEY = 'hvp_lemmer_colorder_v3';
+/* Standaard verborgen kolommen (compacte weergave) — toonbaar via de kolomkiezer of de knop Uitklappen. */
+const DEFAULT_HIDDEN: ColId[] = [
+  'aanlevering_compleet', 'ter_controle_uitvoering', 'retour_uitvoering', 'schouw_uitgevoerd',
+  'opmerkingen_uitvoering', 'ontwerp_pct', 'tek_pct', 'status_werkterrein',
+  'status_berekening', 'sondering_nr', 'sondering_aangevraagd', 'sondering_retour',
+];
+const COL_ORDER_KEY = 'hvp_lemmer_colorder_v4';
+const HIDDEN_KEY = 'hvp_lemmer_hidden_v1';
 /* Koppeling fase-kolom → index in PROCES_FASEN */
 const FASE_COL: Record<string, number> = { fase0: 0, faseG: 1, fase1: 2, fase2: 3 };
 
@@ -253,6 +262,8 @@ export default function LemmerPage() {
   const [columnOrder, setColumnOrder] = useState<ColId[]>(DEFAULT_COL_ORDER);
   const [dragCol, setDragCol]         = useState<ColId | null>(null);
   const [dragOverCol, setDragOverCol] = useState<ColId | null>(null);
+  const [hidden, setHidden]           = useState<Set<ColId>>(new Set(DEFAULT_HIDDEN));
+  const [colPickerOpen, setColPickerOpen] = useState(false);
 
   const [modal, setModal]   = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
@@ -271,6 +282,19 @@ export default function LemmerPage() {
   useEffect(() => {
     try { localStorage.setItem(COL_ORDER_KEY, JSON.stringify(columnOrder)); } catch { /* negeer */ }
   }, [columnOrder]);
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(HIDDEN_KEY);
+      if (raw) setHidden(new Set((JSON.parse(raw) as ColId[]).filter(id => DEFAULT_COL_ORDER.includes(id))));
+    } catch { /* negeer */ }
+  }, []);
+  useEffect(() => {
+    try { localStorage.setItem(HIDDEN_KEY, JSON.stringify([...hidden])); } catch { /* negeer */ }
+  }, [hidden]);
+  const toggleHidden = (id: ColId) => setHidden(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const allVisible = hidden.size === 0;
+  const toggleAlleKolommen = () => setHidden(allVisible ? new Set(DEFAULT_HIDDEN) : new Set());
+  const visibleCols = columnOrder.filter(id => !hidden.has(id));
 
   const onDragStart = (e: React.DragEvent, id: ColId) => { setDragCol(id); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', id); };
   const onDragOver  = (e: React.DragEvent, id: ColId) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; if (id !== dragOverCol) setDragOverCol(id); };
@@ -396,12 +420,9 @@ export default function LemmerPage() {
       const compleet = klaar === total && total > 0;
       const begonnen = klaar > 0;
       return (
-        <td style={{ textAlign: 'center', cursor: 'pointer' }} title={`${f.fase} — open`}
+        <td style={{ textAlign: 'center' }} title={`${f.fase} — open`}
           onClick={() => { setExpanded(prev => { const n = new Set(prev); n.add(d.id); return n; }); toggleFase(`${d.id}|${FASE_COL[colId]}`); }}>
-          <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20, whiteSpace: 'nowrap',
-            background: compleet ? 'var(--g-bg)' : begonnen ? '#FEF3C7' : 'var(--surface3)',
-            color: compleet ? 'var(--g-fg)' : begonnen ? '#92400E' : 'var(--text-3)',
-            border: '0.5px solid var(--border)' }}>{klaar}/{total}</span>
+          <span className={`lem-prog lem-prog-btn${compleet ? ' done' : begonnen ? ' active' : ''}`}>{klaar}/{total}</span>
         </td>
       );
     },
@@ -447,6 +468,18 @@ export default function LemmerPage() {
     fase1: faseCol('Fase 1', 'fase1'),
     fase2: faseCol('Fase 2', 'fase2'),
     planning_apds: dateCol("Planning APD's", 'planning_apds'),
+    aanlevering_compleet: dateCol('Aanlevering compleet', 'aanlevering_compleet'),
+    ter_controle_uitvoering: dateCol('Ter controle uitvoering', 'ter_controle_uitvoering'),
+    retour_uitvoering: dateCol('Retour ontvangen', 'retour_uitvoering'),
+    schouw_uitgevoerd: dateCol('Schouw uitgevoerd', 'schouw_uitgevoerd'),
+    opmerkingen_uitvoering: dateCol('Opm. uitvoering verwerkt', 'opmerkingen_uitvoering'),
+    ontwerp_pct: pctCol('Ontwerp %', 'ontwerp_pct'),
+    tek_pct: pctCol('Tek %', 'tek_pct'),
+    status_werkterrein: statusCol('Werkterrein', 'status_werkterrein'),
+    status_berekening: statusCol('Berekening', 'status_berekening'),
+    sondering_nr: textCol('Sondering nr.', 'sondering_nr'),
+    sondering_aangevraagd: textCol('Sondering aangevraagd', 'sondering_aangevraagd'),
+    sondering_retour: textCol('Sondering retour', 'sondering_retour'),
     bundel_configuratie: textCol('Bundel', 'bundel_configuratie'),
     raakvlak: textCol('Raakvlak', 'raakvlak', { sort: false, wide: true }),
     opmerking_extra: textCol('Opmerking', 'opmerking_extra', { sort: false, wide: true }),
@@ -465,6 +498,39 @@ export default function LemmerPage() {
 
   return (
     <div className="page-content">
+      <style>{`
+        @keyframes lemReveal { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+        .lem-sub-panel { animation: lemReveal .18s cubic-bezier(0.4,0,0.2,1); }
+        .lem-sub-table { border-collapse: separate; border-spacing: 0; font-family: var(--font); }
+        .lem-sub-table th { text-align: left; padding: 4px 10px; font-size: var(--fz-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-4); white-space: nowrap; }
+        .lem-sub-table td { padding: 4px 10px; vertical-align: middle; }
+        .lem-fase-row { cursor: pointer; background: var(--surface3); transition: background .12s ease; }
+        .lem-fase-row:hover { background: var(--accent-3); }
+        .lem-fase-name { font-size: var(--fz-xs); font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); }
+        .lem-chev { display: inline-block; transition: transform .16s cubic-bezier(0.4,0,0.2,1); color: var(--text-4); font-size: 9px; line-height: 1; }
+        .lem-chev.open { transform: rotate(90deg); }
+        .lem-step-row { background: var(--surface); border-top: 0.5px solid var(--border); transition: background .1s ease; }
+        .lem-step-row:hover { background: var(--accent-3); }
+        .lem-step-num { flex-shrink: 0; width: 20px; height: 20px; border-radius: 50%; background: var(--surface3); color: var(--text-2); font-size: var(--fz-xs); font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }
+        .lem-step-title { font-size: var(--fz-base); color: var(--text-2); font-weight: 500; white-space: nowrap; }
+        .lem-step-meta { font-size: var(--fz-xs); color: var(--text-4); white-space: nowrap; }
+        .lem-dot { flex-shrink: 0; width: 8px; height: 8px; border-radius: 50%; transition: background .12s ease; }
+        .lem-prog { display: inline-flex; align-items: center; justify-content: center; font-size: var(--fz-xs); font-weight: 700; padding: 2px 9px; border-radius: 20px; line-height: 1.5; white-space: nowrap; background: var(--n-bg); color: var(--text-3); border: 0.5px solid var(--border); transition: background .12s ease, color .12s ease, border-color .12s ease, transform .12s ease; }
+        .lem-prog.active { background: var(--r-bg); color: var(--r-fg); border-color: var(--r-mid); }
+        .lem-prog.done { background: var(--g-bg); color: var(--g-fg); border-color: var(--g-mid); }
+        .lem-prog-btn { cursor: pointer; }
+        .lem-prog-btn:hover { transform: translateY(-1px); filter: brightness(0.98); }
+        .lem-sub-table .inline-edit { font-family: var(--font); font-size: var(--fz-base); transition: border-color .12s ease, box-shadow .12s ease; }
+        .lem-sub-table .inline-edit:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-2); }
+        .lem-link { color: var(--b-fg); cursor: pointer; transition: opacity .12s ease; }
+        .lem-link:hover { opacity: 0.7; }
+        .lem-person-row { display: flex; align-items: center; justify-content: space-between; padding: 7px 12px; border-radius: var(--r); background: var(--surface3); transition: background .12s ease; }
+        .lem-colpicker { position: absolute; right: 0; top: calc(100% + 6px); z-index: 41; width: 260px; max-height: 360px; overflow-y: auto; background: var(--surface); border: 0.5px solid var(--border-md); border-radius: var(--r-md); box-shadow: var(--sh-md); padding: 8px; animation: lemReveal .14s ease; }
+        .lem-colpicker-row { display: flex; align-items: center; gap: 9px; padding: 5px 8px; border-radius: var(--r); font-size: var(--fz-md); color: var(--text-2); cursor: pointer; transition: background .1s ease; }
+        .lem-colpicker-row:hover { background: var(--surface3); }
+        .lem-colpicker-row input { accent-color: var(--accent); }
+        .lem-person-row:hover { background: var(--n-mid); }
+      `}</style>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 4 }}>
         <h1 style={{ fontSize: 20, fontWeight: 600, margin: 0 }}>Lemmer</h1>
         <span style={{ fontSize: 12, color: 'var(--text-4)' }}>Lemmer-oost · DO · case 283147 · Eelco Zijnstra</span>
@@ -484,8 +550,32 @@ export default function LemmerPage() {
       <div className="filter-bar" style={{ display: 'flex', gap: 8, alignItems: 'center', margin: '0.75rem 0', flexWrap: 'wrap' }}>
         <input className="field-input" placeholder="Zoeken…" value={search} onChange={e => setSearch(e.target.value)} style={{ maxWidth: 280 }} />
         <button className="btn" onClick={() => setPersonenOpen(true)} style={{ fontSize: 11 }} title="Personen beheren">👤 Personen</button>
+        <button className="btn" onClick={toggleAlleKolommen} style={{ fontSize: 11 }} title={allVisible ? 'Terug naar compacte weergave' : 'Alle projectinfo als kolommen tonen'}>
+          {allVisible ? '⤡ Inklappen' : '⤢ Uitklappen'}
+        </button>
         <div style={{ flex: 1 }} />
-        <button className="btn" onClick={resetColumns} style={{ fontSize: 11 }} title="Kolomvolgorde terugzetten">↺ Kolommen</button>
+        <div style={{ position: 'relative' }}>
+          <button className="btn" onClick={() => setColPickerOpen(o => !o)} style={{ fontSize: 11 }} title="Kies welke kolommen zichtbaar zijn">
+            ▦ Kolommen ({visibleCols.length}/{columnOrder.length}) ▾
+          </button>
+          {colPickerOpen && (
+            <>
+              <div onClick={() => setColPickerOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 40 }} />
+              <div className="lem-colpicker">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '2px 8px 8px', borderBottom: '0.5px solid var(--border)', marginBottom: 6 }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--text-4)' }}>Kolommen tonen</span>
+                  <button className="btn" style={{ fontSize: 10, padding: '2px 6px' }} onClick={() => { setColumnOrder(DEFAULT_COL_ORDER); setHidden(new Set(DEFAULT_HIDDEN)); }} title="Volgorde + zichtbaarheid terugzetten">↺ Standaard</button>
+                </div>
+                {columnOrder.map(id => (
+                  <label key={id} className="lem-colpicker-row">
+                    <input type="checkbox" checked={!hidden.has(id)} onChange={() => toggleHidden(id)} />
+                    {columns[id].label}
+                  </label>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
         <button className="btn btn-primary" onClick={() => openEdit()}>+ Boring toevoegen</button>
       </div>
 
@@ -495,7 +585,7 @@ export default function LemmerPage() {
             <thead>
               <tr>
                 <th style={{ width: 30 }}></th>
-                {columnOrder.map(id => {
+                {visibleCols.map(id => {
                   const col = columns[id];
                   const sortable = !!col.sortKey;
                   const cls = ['col-draggable'];
@@ -516,19 +606,19 @@ export default function LemmerPage() {
             </thead>
             <tbody>
               {rows.length === 0 ? (
-                <tr><td colSpan={columnOrder.length + 2}><div className="empty-state"><strong>Geen boringen gevonden</strong>Pas de filters aan.</div></td></tr>
+                <tr><td colSpan={visibleCols.length + 2}><div className="empty-state"><strong>Geen boringen gevonden</strong>Pas de filters aan.</div></td></tr>
               ) : rows.map(d => {
                 const isOpen = expanded.has(d.id);
                 return (
                   <Fragment key={d.id}>
                     <tr style={{ opacity: d.vervallen ? 0.45 : 1 }}>
-                      <td style={{ textAlign: 'center', cursor: 'pointer', color: 'var(--text-3)', whiteSpace: 'nowrap' }}
+                      <td style={{ textAlign: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }}
                         title={isOpen ? 'Stappen inklappen' : 'Stappen uitklappen'}
                         onClick={() => toggleExpand(d.id)}>
-                        <span style={{ display: 'inline-block', transition: 'transform 0.12s', transform: isOpen ? 'rotate(90deg)' : 'none', fontSize: 10 }}>▶</span>
-                        {(() => { const g = stappenGereed(d); return <span style={{ marginLeft: 5, fontSize: 9, fontWeight: 600, color: g > 0 ? '#1A7F3C' : 'var(--text-4)' }}>{g}/{ALLE_STAPPEN.length}</span>; })()}
+                        <span className={`lem-chev${isOpen ? ' open' : ''}`} style={{ fontSize: 10 }}>▶</span>
+                        {(() => { const g = stappenGereed(d); return <span style={{ marginLeft: 5, fontSize: 9, fontWeight: 700, color: g > 0 ? 'var(--g-fg)' : 'var(--text-4)' }}>{g}/{ALLE_STAPPEN.length}</span>; })()}
                       </td>
-                      {columnOrder.map(id => <Fragment key={id}>{columns[id].cell(d)}</Fragment>)}
+                      {visibleCols.map(id => <Fragment key={id}>{columns[id].cell(d)}</Fragment>)}
                       <td onClick={e => e.stopPropagation()}>
                         <button className="btn" style={{ fontSize: 11, padding: '2px 8px' }} onClick={() => openEdit(d.id)}>✎</button>
                       </td>
@@ -536,104 +626,100 @@ export default function LemmerPage() {
                     {isOpen && (
                       <tr>
                         <td></td>
-                        <td colSpan={columnOrder.length + 1} style={{ padding: '8px 10px 16px 8px', background: 'var(--bg)' }}>
-                          <div style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 6 }}>
-                            Engineering-stappen — <strong style={{ color: 'var(--text-2)' }}>{stappenGereed(d)} van {ALLE_STAPPEN.length}</strong> gereed
-                          </div>
-                          <table style={{ borderCollapse: 'collapse', maxWidth: 1180 }}>
-                            <thead>
-                              <tr>
-                                <th style={subTh}>Stap</th>
-                                <th style={subTh}>Status</th>
-                                <th style={subTh}>Eigenaar</th>
-                                <th style={subTh}>Plandatum</th>
-                                <th style={subTh}>Deadline</th>
-                                <th style={subTh}>Weken resterend</th>
-                                <th style={{ ...subTh, textAlign: 'center' }}>Afgerond</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {PROCES_FASEN.map((f, fi) => {
-                                const faseKey = `${d.id}|${fi}`;
-                                const faseOpen = expandedFases.has(faseKey);
-                                const total = f.stappen.length;
-                                const klaar = f.stappen.filter(s => stapDone(getStap(d, s.id))).length;
-                                const compleet = klaar === total && total > 0;
-                                return (
-                                <Fragment key={f.fase}>
-                                  <tr style={{ cursor: 'pointer', background: 'var(--surface3)', borderTop: '0.5px solid var(--border)' }} onClick={() => toggleFase(faseKey)}>
-                                    <td colSpan={7} style={{ padding: '7px 8px' }}>
-                                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                        <span style={{ display: 'inline-block', transition: 'transform 0.12s', transform: faseOpen ? 'rotate(90deg)' : 'none', fontSize: 9, color: 'var(--text-3)' }}>▶</span>
-                                        <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--accent)' }}>{f.fase}</span>
-                                        <span style={{ marginLeft: 4, fontSize: 10, fontWeight: 700, padding: '1px 8px', borderRadius: 20, background: compleet ? 'var(--g-bg)' : 'var(--surface)', color: compleet ? 'var(--g-fg)' : 'var(--text-3)', border: '0.5px solid var(--border)' }}>{klaar}/{total}</span>
-                                      </div>
-                                    </td>
-                                  </tr>
-                                  {faseOpen && f.stappen.map(s => {
-                                    const sd = getStap(d, s.id);
-                                    const dot = STAP_KLEUR[sd.status ?? ''] ?? '#D1D5DB';
-                                    const wk = (sd.deadline && !sd.afgerond)
-                                      ? Math.round((new Date(sd.deadline).getTime() - Date.now()) / (1000 * 60 * 60 * 24 * 7))
-                                      : null;
-                                    return (
-                                      <tr key={s.id} style={{ borderTop: '0.5px solid var(--border)', background: 'var(--surface)' }}>
-                                        <td style={{ ...subTd, minWidth: 320 }}>
+                        <td colSpan={visibleCols.length + 1} style={{ padding: '8px 10px 16px 8px', background: 'var(--bg)' }}>
+                          <div className="lem-sub-panel">
+                            <div style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 8 }}>
+                              Engineering-stappen — <strong style={{ color: 'var(--text-2)' }}>{stappenGereed(d)} van {ALLE_STAPPEN.length}</strong> gereed
+                            </div>
+                            <table className="lem-sub-table" style={{ maxWidth: 1180 }}>
+                              <thead>
+                                <tr>
+                                  <th>Stap</th><th>Status</th><th>Eigenaar</th><th>Plandatum</th><th>Deadline</th><th>Weken resterend</th><th style={{ textAlign: 'center' }}>Afgerond</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {PROCES_FASEN.map((f, fi) => {
+                                  const faseKey = `${d.id}|${fi}`;
+                                  const faseOpen = expandedFases.has(faseKey);
+                                  const total = f.stappen.length;
+                                  const klaar = f.stappen.filter(s => stapDone(getStap(d, s.id))).length;
+                                  const compleet = klaar === total && total > 0;
+                                  return (
+                                    <Fragment key={f.fase}>
+                                      <tr className="lem-fase-row" onClick={() => toggleFase(faseKey)}>
+                                        <td colSpan={7} style={{ padding: '8px 10px' }}>
                                           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                            <span style={{ flexShrink: 0, width: 20, height: 20, borderRadius: '50%', background: 'var(--surface3)', color: 'var(--text-2)', fontSize: 10, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{s.nr}</span>
-                                            <span style={{ flexShrink: 0, width: 9, height: 9, borderRadius: '50%', background: dot }} />
-                                            <span style={{ fontSize: 12, color: 'var(--text-2)', fontWeight: 500, whiteSpace: 'nowrap' }}>{s.titel}</span>
-                                            <span style={{ fontSize: 10, color: 'var(--text-4)', whiteSpace: 'nowrap' }}>· {s.wie} · {s.tijd}</span>
+                                            <span className={`lem-chev${faseOpen ? ' open' : ''}`}>▶</span>
+                                            <span className="lem-fase-name">{f.fase}</span>
+                                            <span className={`lem-prog${compleet ? ' done' : ''}`} style={{ marginLeft: 2 }}>{klaar}/{total}</span>
                                           </div>
                                         </td>
-                                        <td style={subTd}>
-                                          <select className="inline-edit" style={{ minWidth: 104, cursor: 'pointer' }}
-                                            value={sd.status ?? ''} onChange={e => saveStapVeld(d, s.id, { status: e.target.value || undefined })}>
-                                            <option value="">—</option>
-                                            {STAP_STATUS.map(st => <option key={st} value={st}>{st}</option>)}
-                                          </select>
-                                        </td>
-                                        <td style={subTd}>
-                                          <select className="inline-edit" style={{ minWidth: 150, cursor: 'pointer' }}
-                                            value={sd.eigenaar ?? ''} onChange={e => saveStapVeld(d, s.id, { eigenaar: e.target.value || undefined })}>
-                                            <option value="">—</option>
-                                            {sd.eigenaar && !personen.some(p => p.naam === sd.eigenaar) && <option value={sd.eigenaar}>{sd.eigenaar}</option>}
-                                            {personen.map(p => <option key={p.id} value={p.naam}>{p.naam}</option>)}
-                                          </select>
-                                        </td>
-                                        <td style={subTd}>
-                                          <input className="inline-edit" type="date" style={{ minWidth: 120, cursor: 'pointer' }} value={sd.plandatum ?? ''}
-                                            onChange={e => saveStapVeld(d, s.id, { plandatum: e.target.value || undefined })}
-                                            onClick={e => { try { (e.currentTarget as HTMLInputElement & { showPicker?: () => void }).showPicker?.(); } catch { /* */ } }} />
-                                        </td>
-                                        <td style={subTd}>
-                                          <input className="inline-edit" type="date" style={{ minWidth: 120, cursor: 'pointer' }} value={sd.deadline ?? ''}
-                                            onChange={e => saveStapVeld(d, s.id, { deadline: e.target.value || undefined })}
-                                            onClick={e => { try { (e.currentTarget as HTMLInputElement & { showPicker?: () => void }).showPicker?.(); } catch { /* */ } }} />
-                                        </td>
-                                        <td style={{ ...subTd, whiteSpace: 'nowrap' }}>
-                                          {sd.afgerond
-                                            ? <span className="wk-chip wk-ok">afgerond</span>
-                                            : wk === null
-                                              ? <span style={{ color: 'var(--text-4)', fontSize: 11 }}>—</span>
-                                              : wk < 0
-                                                ? <span className="wk-chip wk-warn">{Math.abs(wk)}w te laat</span>
-                                                : wk <= 4
-                                                  ? <span className="wk-chip wk-soon">{wk}w</span>
-                                                  : <span className="wk-chip wk-ok">{wk}w</span>}
-                                        </td>
-                                        <td style={{ ...subTd, textAlign: 'center' }}>
-                                          <input type="checkbox" checked={!!sd.afgerond} style={{ width: 15, height: 15, cursor: 'pointer' }}
-                                            onChange={e => saveStapVeld(d, s.id, { afgerond: e.target.checked })} />
-                                        </td>
                                       </tr>
-                                    );
-                                  })}
-                                </Fragment>
-                                );
-                              })}
-                            </tbody>
-                          </table>
+                                      {faseOpen && f.stappen.map(s => {
+                                        const sd = getStap(d, s.id);
+                                        const dot = STAP_KLEUR[sd.status ?? ''] ?? 'var(--border-md)';
+                                        const wk = (sd.deadline && !sd.afgerond)
+                                          ? Math.round((new Date(sd.deadline).getTime() - Date.now()) / (1000 * 60 * 60 * 24 * 7))
+                                          : null;
+                                        return (
+                                          <tr className="lem-step-row" key={s.id}>
+                                            <td style={{ minWidth: 320 }}>
+                                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                <span className="lem-step-num">{s.nr}</span>
+                                                <span className="lem-dot" style={{ background: dot }} />
+                                                <span className="lem-step-title">{s.titel}</span>
+                                                <span className="lem-step-meta">· {s.wie} · {s.tijd}</span>
+                                              </div>
+                                            </td>
+                                            <td>
+                                              <select className="inline-edit" style={{ minWidth: 104, cursor: 'pointer' }}
+                                                value={sd.status ?? ''} onChange={e => saveStapVeld(d, s.id, { status: e.target.value || undefined })}>
+                                                <option value="">—</option>
+                                                {STAP_STATUS.map(st => <option key={st} value={st}>{st}</option>)}
+                                              </select>
+                                            </td>
+                                            <td>
+                                              <select className="inline-edit" style={{ minWidth: 150, cursor: 'pointer' }}
+                                                value={sd.eigenaar ?? ''} onChange={e => saveStapVeld(d, s.id, { eigenaar: e.target.value || undefined })}>
+                                                <option value="">—</option>
+                                                {sd.eigenaar && !personen.some(p => p.naam === sd.eigenaar) && <option value={sd.eigenaar}>{sd.eigenaar}</option>}
+                                                {personen.map(p => <option key={p.id} value={p.naam}>{p.naam}</option>)}
+                                              </select>
+                                            </td>
+                                            <td>
+                                              <input className="inline-edit" type="date" style={{ minWidth: 120, cursor: 'pointer' }} value={sd.plandatum ?? ''}
+                                                onChange={e => saveStapVeld(d, s.id, { plandatum: e.target.value || undefined })}
+                                                onClick={e => { try { (e.currentTarget as HTMLInputElement & { showPicker?: () => void }).showPicker?.(); } catch { /* */ } }} />
+                                            </td>
+                                            <td>
+                                              <input className="inline-edit" type="date" style={{ minWidth: 120, cursor: 'pointer' }} value={sd.deadline ?? ''}
+                                                onChange={e => saveStapVeld(d, s.id, { deadline: e.target.value || undefined })}
+                                                onClick={e => { try { (e.currentTarget as HTMLInputElement & { showPicker?: () => void }).showPicker?.(); } catch { /* */ } }} />
+                                            </td>
+                                            <td style={{ whiteSpace: 'nowrap' }}>
+                                              {sd.afgerond
+                                                ? <span className="wk-chip wk-ok">afgerond</span>
+                                                : wk === null
+                                                  ? <span style={{ color: 'var(--text-4)', fontSize: 11 }}>—</span>
+                                                  : wk < 0
+                                                    ? <span className="wk-chip wk-over">{Math.abs(wk)}w te laat</span>
+                                                    : wk <= 4
+                                                      ? <span className="wk-chip wk-warn">{wk}w</span>
+                                                      : <span className="wk-chip wk-ok">{wk}w</span>}
+                                            </td>
+                                            <td style={{ textAlign: 'center' }}>
+                                              <input type="checkbox" checked={!!sd.afgerond} style={{ width: 15, height: 15, cursor: 'pointer', accentColor: 'var(--accent)' }}
+                                                onChange={e => saveStapVeld(d, s.id, { afgerond: e.target.checked })} />
+                                            </td>
+                                          </tr>
+                                        );
+                                      })}
+                                    </Fragment>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
                         </td>
                       </tr>
                     )}
@@ -706,9 +792,11 @@ export default function LemmerPage() {
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 320, overflowY: 'auto' }}>
               {personen.map(p => (
-                <div key={p.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 12px', borderRadius: 6, background: 'var(--surface3)' }}>
+                <div key={p.id} className="lem-person-row">
                   <span style={{ fontSize: 13, color: 'var(--text-2)' }}>{p.naam}</span>
-                  <button className="btn" style={{ fontSize: 11, padding: '2px 8px', color: '#B91C1C' }} onClick={() => handleRemovePersoon(p.id)}>Verwijderen</button>
+                  <button className="btn" style={{ fontSize: 11, padding: '2px 8px' }} onClick={() => handleRemovePersoon(p.id)}>
+                    <span className="lem-link">Verwijderen</span>
+                  </button>
                 </div>
               ))}
             </div>
