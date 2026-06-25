@@ -289,7 +289,7 @@ export default function LemmerPage() {
     } catch { /* negeer */ }
   }, []);
   useEffect(() => {
-    try { localStorage.setItem(HIDDEN_KEY, JSON.stringify([...hidden])); } catch { /* negeer */ }
+    try { localStorage.setItem(HIDDEN_KEY, JSON.stringify(Array.from(hidden))); } catch { /* negeer */ }
   }, [hidden]);
   const toggleHidden = (id: ColId) => setHidden(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const allVisible = hidden.size === 0;
