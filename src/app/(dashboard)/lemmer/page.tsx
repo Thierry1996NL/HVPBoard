@@ -242,16 +242,16 @@ type Persoon = { id: string; naam: string };
 type ColId =
   | 'boring_nr' | 'werkpakket_nr' | 'locatie' | 'lengte_m' | 'type_boring' | 'aannemer' | 'klasse'
   | 'prioritering' | 'oplevering_toolgate' | 'projectfase' | 'engineeringsfase'
-  | 'startdatum' | 'fase0' | 'faseG' | 'fase1' | 'fase2' | 'einddatum' | 'actieve_stap'
+  | 'startdatum' | 'fase0' | 'faseG' | 'fase1' | 'fase2' | 'einddatum' | 'eind_weken' | 'actieve_stap'
   | 'aanlevering_compleet' | 'ter_controle_uitvoering' | 'retour_uitvoering' | 'schouw_uitgevoerd'
   | 'opmerkingen_uitvoering' | 'planning_apds' | 'ontwerp_pct' | 'tek_pct' | 'status_werkterrein'
   | 'status_berekening' | 'sondering_nr' | 'sondering_aangevraagd' | 'sondering_retour'
   | 'bundel_configuratie' | 'raakvlak' | 'opmerking_extra' | 'case_nr';
 
 const DEFAULT_COL_ORDER: ColId[] = [
-  'boring_nr', 'werkpakket_nr', 'locatie', 'lengte_m', 'type_boring', 'aannemer', 'klasse',
+  'boring_nr', 'werkpakket_nr', 'locatie', 'lengte_m', 'type_boring', 'klasse', 'aannemer',
   'prioritering', 'oplevering_toolgate', 'projectfase', 'engineeringsfase',
-  'startdatum', 'fase0', 'faseG', 'fase1', 'fase2', 'einddatum', 'actieve_stap',
+  'startdatum', 'fase0', 'faseG', 'fase1', 'fase2', 'einddatum', 'eind_weken', 'actieve_stap',
   'aanlevering_compleet', 'ter_controle_uitvoering', 'retour_uitvoering', 'schouw_uitgevoerd',
   'opmerkingen_uitvoering', 'planning_apds', 'ontwerp_pct', 'tek_pct', 'status_werkterrein',
   'status_berekening', 'sondering_nr', 'sondering_aangevraagd', 'sondering_retour',
@@ -259,16 +259,18 @@ const DEFAULT_COL_ORDER: ColId[] = [
 ];
 /* Standaard verborgen kolommen (compacte weergave) — toonbaar via de kolomkiezer of de knop Uitklappen. */
 const DEFAULT_HIDDEN: ColId[] = [
-  'oplevering_toolgate', 'projectfase', 'engineeringsfase',
+  'oplevering_toolgate', 'projectfase', 'engineeringsfase', 'planning_apds',
   'aanlevering_compleet', 'ter_controle_uitvoering', 'retour_uitvoering', 'schouw_uitgevoerd',
   'opmerkingen_uitvoering', 'ontwerp_pct', 'tek_pct', 'status_werkterrein',
   'status_berekening', 'sondering_nr', 'sondering_aangevraagd', 'sondering_retour',
   'raakvlak', 'opmerking_extra', 'case_nr', 'bundel_configuratie',
 ];
-const COL_ORDER_KEY = 'hvp_lemmer_colorder_v5';
-const HIDDEN_KEY = 'hvp_lemmer_hidden_v4';
+const COL_ORDER_KEY = 'hvp_lemmer_colorder_v7';
+const HIDDEN_KEY = 'hvp_lemmer_hidden_v5';
 /* Koppeling fase-kolom → index in PROCES_FASEN */
 const FASE_COL: Record<string, number> = { fase0: 0, faseG: 1, fase1: 2, fase2: 3 };
+/* Berekende kolommen zonder eigen databaseveld — niet filterbaar via de header. */
+const NIET_FILTERBAAR: ColId[] = ['fase0', 'faseG', 'fase1', 'fase2', 'einddatum', 'eind_weken', 'actieve_stap'];
 
 export default function LemmerPage() {
   const toast = useToast();
@@ -299,6 +301,9 @@ export default function LemmerPage() {
   const [dragOverCol, setDragOverCol] = useState<ColId | null>(null);
   const [hidden, setHidden]           = useState<Set<ColId>>(new Set(DEFAULT_HIDDEN));
   const [colPickerOpen, setColPickerOpen] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [colFilters, setColFilters]   = useState<Partial<Record<ColId, string>>>({});
+  const activeFilters = Object.values(colFilters).filter(v => (v ?? '').trim()).length;
 
   const [modal, setModal]   = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
@@ -407,8 +412,11 @@ export default function LemmerPage() {
       const av = a[sortCol], bv = b[sortCol];
       return String(av ?? '').localeCompare(String(bv ?? ''), 'nl', { numeric: true }) * sortDir;
     });
+    const fEntries = Object.entries(colFilters).filter(([id, v]) => (v ?? '').trim() && !NIET_FILTERBAAR.includes(id as ColId));
+    if (fEntries.length) r = r.filter(d => fEntries.every(([id, v]) =>
+      String(d[id as keyof LemmerBoring] ?? '').toLowerCase().includes((v as string).trim().toLowerCase())));
     return r;
-  }, [data, search, kpi, sortCol, sortDir]);
+  }, [data, search, kpi, sortCol, sortDir, colFilters]);
 
   const openEdit = (id?: string) => {
     const d = id ? data.find(x => x.id === id) : undefined;
@@ -537,11 +545,22 @@ export default function LemmerPage() {
       return <td style={{ fontSize: 11, whiteSpace: 'nowrap', color: e ? 'var(--text-2)' : 'var(--text-4)', fontWeight: e ? 500 : 400 }}
         title={e ? 'Laatste deadline van de stappen' : 'Vul eerst een startdatum in'}>{e ? fmtDate(e) : '—'}</td>;
     } },
+    eind_weken: { label: 'Weken tot eind', cell: d => {
+      const deadlines = ALLE_STAPPEN.map(s => getStap(d, s.id).deadline).filter(Boolean) as string[];
+      const e = deadlines.length ? deadlines.reduce((a, b) => (a > b ? a : b)) : einddatumVan(d.startdatum);
+      if (!e) return <td style={{ color: 'var(--text-4)', fontSize: 11 }}>—</td>;
+      const wk = Math.round((new Date(e).getTime() - Date.now()) / MS_WEEK);
+      return <td style={{ whiteSpace: 'nowrap' }}>
+        {wk < 0 ? <span className="wk-chip wk-over">{Math.abs(wk)}w te laat</span>
+          : wk <= 4 ? <span className="wk-chip wk-warn">{wk}w</span>
+            : <span className="wk-chip wk-ok">{wk}w</span>}
+      </td>;
+    } },
     actieve_stap: { label: 'Actieve stap', cell: d => {
       const a = activeStap(d);
       if (!a) return <td style={{ color: 'var(--text-4)', fontSize: 11 }}>{stappenGereed(d) === ALLE_STAPPEN.length ? 'Alles gereed' : '—'}</td>;
       const { step, sd } = a;
-      const wk = sd.plandatum ? Math.round((new Date(sd.plandatum).getTime() - Date.now()) / MS_WEEK) : null;
+      const wk = sd.deadline ? Math.round((new Date(sd.deadline).getTime() - Date.now()) / MS_WEEK) : null;
       return (
         <td style={{ minWidth: 230 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -550,7 +569,7 @@ export default function LemmerPage() {
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10, color: 'var(--text-4)', whiteSpace: 'nowrap' }}>
               <span>{sd.eigenaar || 'geen eigenaar'}</span><span>·</span>
-              <span>{sd.plandatum ? fmtDate(sd.plandatum) : 'geen plandatum'}</span>
+              <span>{sd.deadline ? fmtDate(sd.deadline) : 'geen deadline'}</span>
               {wk !== null && (wk < 0
                 ? <span className="wk-chip wk-over">{Math.abs(wk)}w te laat</span>
                 : wk <= 4 ? <span className="wk-chip wk-warn">{wk}w</span>
@@ -646,6 +665,9 @@ export default function LemmerPage() {
         <button className="btn" onClick={toggleAlleKolommen} style={{ fontSize: 11 }} title={allVisible ? 'Terug naar compacte weergave' : 'Alle projectinfo als kolommen tonen'}>
           {allVisible ? '⤡ Inklappen' : '⤢ Uitklappen'}
         </button>
+        <button className="btn" onClick={() => setFiltersOpen(o => !o)} style={{ fontSize: 11, ...(filtersOpen || activeFilters ? { borderColor: 'var(--accent)', color: 'var(--accent)' } : {}) }} title="Filter de rijen per kolom">
+          ⌕ Filter{activeFilters ? ` (${activeFilters})` : ''}
+        </button>
         <div style={{ flex: 1 }} />
         <div style={{ position: 'relative' }}>
           <button className="btn" onClick={() => setColPickerOpen(o => !o)} style={{ fontSize: 11 }} title="Kies welke kolommen zichtbaar zijn">
@@ -696,6 +718,24 @@ export default function LemmerPage() {
                 })}
                 <th></th>
               </tr>
+              {filtersOpen && (
+                <tr>
+                  <th style={{ padding: '2px 4px', textAlign: 'center' }}>
+                    {activeFilters > 0 && (
+                      <button className="btn" title="Filters wissen" style={{ fontSize: 10, padding: '1px 5px' }} onClick={() => setColFilters({})}>✕</button>
+                    )}
+                  </th>
+                  {visibleCols.map(id => (
+                    <th key={id} style={{ padding: '2px 6px' }}>
+                      {NIET_FILTERBAAR.includes(id) ? null : (
+                        <input className="inline-edit" style={{ width: '100%', minWidth: 64, fontWeight: 400 }} placeholder="filter…"
+                          value={colFilters[id] ?? ''} onChange={e => setColFilters(f => ({ ...f, [id]: e.target.value }))} />
+                      )}
+                    </th>
+                  ))}
+                  <th></th>
+                </tr>
+              )}
             </thead>
             <tbody>
               {rows.length === 0 ? (
