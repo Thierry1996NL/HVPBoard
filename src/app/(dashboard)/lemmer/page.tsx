@@ -226,13 +226,14 @@ const DEFAULT_COL_ORDER: ColId[] = [
 ];
 /* Standaard verborgen kolommen (compacte weergave) — toonbaar via de kolomkiezer of de knop Uitklappen. */
 const DEFAULT_HIDDEN: ColId[] = [
+  'oplevering_toolgate', 'projectfase', 'engineeringsfase',
   'aanlevering_compleet', 'ter_controle_uitvoering', 'retour_uitvoering', 'schouw_uitgevoerd',
   'opmerkingen_uitvoering', 'ontwerp_pct', 'tek_pct', 'status_werkterrein',
   'status_berekening', 'sondering_nr', 'sondering_aangevraagd', 'sondering_retour',
   'raakvlak', 'opmerking_extra', 'case_nr',
 ];
 const COL_ORDER_KEY = 'hvp_lemmer_colorder_v4';
-const HIDDEN_KEY = 'hvp_lemmer_hidden_v2';
+const HIDDEN_KEY = 'hvp_lemmer_hidden_v3';
 /* Koppeling fase-kolom → index in PROCES_FASEN */
 const FASE_COL: Record<string, number> = { fase0: 0, faseG: 1, fase1: 2, fase2: 3 };
 
