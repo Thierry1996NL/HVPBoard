@@ -203,6 +203,7 @@ const STAP_STATUS = ['Niet gestart', 'Loopt', 'Gereed', 'N.v.t.'];
 const STAP_KLEUR: Record<string, string> = { 'Gereed': '#1A7F3C', 'Loopt': '#F5A623', 'N.v.t.': '#9CA3AF', 'Niet gestart': '#D1D5DB' };
 /* Per stap, per boring: status + eigenaar + plandatum + deadline + afgerond. */
 type StapData = { status?: string; eigenaar?: string; plandatum?: string; deadline?: string; afgerond?: boolean };
+type Persoon = { id: string; naam: string };
 const subTh: React.CSSProperties = { textAlign: 'left', padding: '2px 8px', fontWeight: 600, whiteSpace: 'nowrap', fontSize: 10, color: 'var(--text-4)', textTransform: 'uppercase', letterSpacing: '0.04em' };
 const subTd: React.CSSProperties = { padding: '3px 8px', verticalAlign: 'middle' };
 
@@ -227,7 +228,18 @@ const FASE_COL: Record<string, number> = { fase0: 0, faseG: 1, fase1: 2, fase2: 
 
 export default function LemmerPage() {
   const toast = useToast();
-  const { data, loading, save, remove } = useLemmerData();
+  const { data, loading, save, remove, personen, addPersoon, removePersoon } = useLemmerData();
+  const [personenOpen, setPersonenOpen] = useState(false);
+  const [nieuwPersoon, setNieuwPersoon] = useState('');
+  const handleAddPersoon = async () => {
+    const naam = nieuwPersoon.trim();
+    if (!naam) return;
+    if (personen.some(p => p.naam.toLowerCase() === naam.toLowerCase())) { toast('Deze persoon bestaat al', 'error'); return; }
+    try { await addPersoon(naam); setNieuwPersoon(''); } catch (e) { toast((e as Error).message, 'error'); }
+  };
+  const handleRemovePersoon = async (id: string) => {
+    try { await removePersoon(id); } catch (e) { toast((e as Error).message, 'error'); }
+  };
 
   const [search, setSearch]   = useState('');
   const [kpi, setKpi]         = useState<string>('actief');
@@ -471,6 +483,7 @@ export default function LemmerPage() {
 
       <div className="filter-bar" style={{ display: 'flex', gap: 8, alignItems: 'center', margin: '0.75rem 0', flexWrap: 'wrap' }}>
         <input className="field-input" placeholder="Zoeken…" value={search} onChange={e => setSearch(e.target.value)} style={{ maxWidth: 280 }} />
+        <button className="btn" onClick={() => setPersonenOpen(true)} style={{ fontSize: 11 }} title="Personen beheren">👤 Personen</button>
         <div style={{ flex: 1 }} />
         <button className="btn" onClick={resetColumns} style={{ fontSize: 11 }} title="Kolomvolgorde terugzetten">↺ Kolommen</button>
         <button className="btn btn-primary" onClick={() => openEdit()}>+ Boring toevoegen</button>
@@ -581,10 +594,12 @@ export default function LemmerPage() {
                                           </select>
                                         </td>
                                         <td style={subTd}>
-                                          <input className="inline-edit" type="text" style={{ minWidth: 130 }} placeholder={s.wie}
-                                            key={`${s.id}-eig-${sd.eigenaar ?? ''}`} defaultValue={sd.eigenaar ?? ''}
-                                            onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-                                            onBlur={e => { const v = e.target.value.trim(); if (v !== (sd.eigenaar ?? '')) saveStapVeld(d, s.id, { eigenaar: v || undefined }); }} />
+                                          <select className="inline-edit" style={{ minWidth: 150, cursor: 'pointer' }}
+                                            value={sd.eigenaar ?? ''} onChange={e => saveStapVeld(d, s.id, { eigenaar: e.target.value || undefined })}>
+                                            <option value="">—</option>
+                                            {sd.eigenaar && !personen.some(p => p.naam === sd.eigenaar) && <option value={sd.eigenaar}>{sd.eigenaar}</option>}
+                                            {personen.map(p => <option key={p.id} value={p.naam}>{p.naam}</option>)}
+                                          </select>
                                         </td>
                                         <td style={subTd}>
                                           <input className="inline-edit" type="date" style={{ minWidth: 120, cursor: 'pointer' }} value={sd.plandatum ?? ''}
@@ -673,6 +688,33 @@ export default function LemmerPage() {
           </div>
         </Modal>
       )}
+
+      {personenOpen && (
+        <Modal open onClose={() => setPersonenOpen(false)} maxWidth={440} title="Personen beheren"
+          footer={<button className="btn" onClick={() => setPersonenOpen(false)}>Sluiten</button>}>
+          <p style={{ fontSize: 12, color: 'var(--text-3)', margin: '0 0 12px' }}>
+            Voeg personen toe of verwijder ze. Ze zijn daarna te kiezen als <strong>eigenaar</strong> bij elke stap.
+          </p>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+            <input className="field-input" placeholder="Naam toevoegen…" value={nieuwPersoon} style={{ flex: 1 }}
+              onChange={e => setNieuwPersoon(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddPersoon(); } }} />
+            <button className="btn btn-primary" onClick={handleAddPersoon}>Toevoegen</button>
+          </div>
+          {personen.length === 0 ? (
+            <p style={{ fontSize: 13, color: 'var(--text-4)' }}>Nog geen personen toegevoegd.</p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 320, overflowY: 'auto' }}>
+              {personen.map(p => (
+                <div key={p.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 12px', borderRadius: 6, background: 'var(--surface3)' }}>
+                  <span style={{ fontSize: 13, color: 'var(--text-2)' }}>{p.naam}</span>
+                  <button className="btn" style={{ fontSize: 11, padding: '2px 8px', color: '#B91C1C' }} onClick={() => handleRemovePersoon(p.id)}>Verwijderen</button>
+                </div>
+              ))}
+            </div>
+          )}
+        </Modal>
+      )}
     </div>
   );
 }
@@ -685,6 +727,7 @@ function F({ label, children, span }: { label: string; children: React.ReactNode
 function useLemmerData() {
   const [data, setData] = useState<LemmerBoring[]>([]);
   const [loading, setLoading] = useState(true);
+  const [personen, setPersonen] = useState<Persoon[]>([]);
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -695,7 +738,27 @@ function useLemmerData() {
     } catch (err) { console.error('Fout bij laden lemmer:', err); }
     finally { setLoading(false); }
   }, []);
-  useEffect(() => { load(); }, [load]);
+  const loadPersonen = useCallback(async () => {
+    try {
+      const supabase = createClient();
+      const { data: rows, error } = await supabase.from('personen').select('*').order('naam', { ascending: true });
+      if (error) throw error;
+      setPersonen((rows ?? []) as unknown as Persoon[]);
+    } catch (err) { console.error('Fout bij laden personen:', err); }
+  }, []);
+  useEffect(() => { load(); loadPersonen(); }, [load, loadPersonen]);
+  const addPersoon = useCallback(async (naam: string) => {
+    const supabase = createClient();
+    const { data: ins, error } = await supabase.from('personen').insert({ naam } as never).select();
+    if (error) throw new Error(error.message);
+    if (ins) setPersonen(prev => [...prev, ...(ins as unknown as Persoon[])].sort((a, b) => a.naam.localeCompare(b.naam)));
+  }, []);
+  const removePersoon = useCallback(async (id: string) => {
+    const supabase = createClient();
+    const { error } = await supabase.from('personen').delete().eq('id', id);
+    if (error) throw new Error(error.message);
+    setPersonen(prev => prev.filter(p => p.id !== id));
+  }, []);
   const save = useCallback(async (id: string | null, form: Partial<LemmerBoring>) => {
     const supabase = createClient();
     if (id) {
@@ -714,5 +777,5 @@ function useLemmerData() {
     if (error) throw new Error(error.message);
     setData(prev => prev.filter(r => r.id !== id));
   }, []);
-  return { data, loading, save, remove, reload: load };
+  return { data, loading, save, remove, reload: load, personen, addPersoon, removePersoon };
 }
