@@ -210,6 +210,7 @@ const subTd: React.CSSProperties = { padding: '3px 8px', verticalAlign: 'middle'
 type ColId =
   | 'boring_nr' | 'werkpakket_nr' | 'locatie' | 'lengte_m' | 'type_boring' | 'aannemer' | 'klasse'
   | 'prioritering' | 'oplevering_toolgate' | 'projectfase' | 'engineeringsfase'
+  | 'fase0' | 'faseG' | 'fase1' | 'fase2'
   | 'aanlevering_compleet' | 'ter_controle_uitvoering' | 'retour_uitvoering' | 'schouw_uitgevoerd'
   | 'opmerkingen_uitvoering' | 'planning_apds' | 'ontwerp_pct' | 'tek_pct' | 'status_werkterrein'
   | 'status_berekening' | 'sondering_nr' | 'sondering_aangevraagd' | 'sondering_retour'
@@ -218,12 +219,15 @@ type ColId =
 const DEFAULT_COL_ORDER: ColId[] = [
   'boring_nr', 'werkpakket_nr', 'locatie', 'lengte_m', 'type_boring', 'aannemer', 'klasse',
   'prioritering', 'oplevering_toolgate', 'projectfase', 'engineeringsfase',
+  'fase0', 'faseG', 'fase1', 'fase2',
   'aanlevering_compleet', 'ter_controle_uitvoering', 'retour_uitvoering', 'schouw_uitgevoerd',
   'opmerkingen_uitvoering', 'planning_apds', 'ontwerp_pct', 'tek_pct', 'status_werkterrein',
   'status_berekening', 'sondering_nr', 'sondering_aangevraagd', 'sondering_retour',
   'bundel_configuratie', 'raakvlak', 'opmerking_extra', 'case_nr',
 ];
-const COL_ORDER_KEY = 'hvp_lemmer_colorder_v1';
+const COL_ORDER_KEY = 'hvp_lemmer_colorder_v2';
+/* Koppeling fase-kolom → index in PROCES_FASEN */
+const FASE_COL: Record<string, number> = { fase0: 0, faseG: 1, fase1: 2, fase2: 3 };
 
 export default function LemmerPage() {
   const toast = useToast();
@@ -374,6 +378,27 @@ export default function LemmerPage() {
     ),
   });
 
+  /* Fase-kolom: toont x/y voortgang van die fase; klik opent de boring + die fase. */
+  const faseCol = (label: string, colId: string): { label: string; sortKey?: keyof LemmerBoring; cell: (d: LemmerBoring) => React.ReactNode } => ({
+    label,
+    cell: d => {
+      const f = PROCES_FASEN[FASE_COL[colId]];
+      const total = f.stappen.length;
+      const klaar = f.stappen.filter(s => stapDone(getStap(d, s.id))).length;
+      const compleet = klaar === total && total > 0;
+      const begonnen = klaar > 0;
+      return (
+        <td style={{ textAlign: 'center', cursor: 'pointer' }} title={`${f.fase} — open`}
+          onClick={() => { setExpanded(prev => { const n = new Set(prev); n.add(d.id); return n; }); toggleFase(`${d.id}|${FASE_COL[colId]}`); }}>
+          <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20, whiteSpace: 'nowrap',
+            background: compleet ? 'var(--g-bg)' : begonnen ? '#FEF3C7' : 'var(--surface3)',
+            color: compleet ? 'var(--g-fg)' : begonnen ? '#92400E' : 'var(--text-3)',
+            border: '0.5px solid var(--border)' }}>{klaar}/{total}</span>
+        </td>
+      );
+    },
+  });
+
   const columns: Record<ColId, { label: string; sortKey?: keyof LemmerBoring; cell: (d: LemmerBoring) => React.ReactNode }> = {
     boring_nr: { label: 'Boor nr', sortKey: 'boring_nr', cell: d => (
       <InlineCell type="text" value={d.boring_nr} tdStyle={{ fontWeight: 600 }}
@@ -409,6 +434,10 @@ export default function LemmerPage() {
     oplevering_toolgate: textCol('Oplevering Toolgate', 'oplevering_toolgate', { wide: true }),
     projectfase: textCol('Projectfase', 'projectfase'),
     engineeringsfase: textCol('Engineeringsfase', 'engineeringsfase', { wide: true }),
+    fase0: faseCol('Fase 0', 'fase0'),
+    faseG: faseCol('Gate', 'faseG'),
+    fase1: faseCol('Fase 1', 'fase1'),
+    fase2: faseCol('Fase 2', 'fase2'),
     aanlevering_compleet: dateCol('Aanlevering compleet', 'aanlevering_compleet'),
     ter_controle_uitvoering: dateCol('Ter controle uitvoering', 'ter_controle_uitvoering'),
     retour_uitvoering: dateCol('Retour ontvangen', 'retour_uitvoering'),
