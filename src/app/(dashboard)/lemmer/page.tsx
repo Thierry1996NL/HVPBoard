@@ -159,6 +159,7 @@ interface LemmerBoring {
   raakvlak?: string;
   opmerking_extra?: string;
   vervallen?: boolean;
+  startdatum?: string;
   stappen?: Record<string, StapData>;
 }
 
@@ -199,6 +200,24 @@ const PROCES_FASEN: { fase: string; stappen: ProcesStap[] }[] = [
   ] },
 ];
 const ALLE_STAPPEN: ProcesStap[] = PROCES_FASEN.flatMap(f => f.stappen);
+/* Zet een doorlooptijd-tekst om naar weken. 'wk'/'weken' = weken; 'wd'/'d' = werkdagen (÷5).
+   Bij een marge (bijv. 3–5) nemen we de bovengrens ('uiterste' doorlooptijd). */
+function duurNaarWeken(t: string): number {
+  const nums = (t.match(/\d+(?:[.,]\d+)?/g) || []).map(n => parseFloat(n.replace(',', '.')));
+  if (!nums.length) return 0;
+  const val = Math.max(...nums);
+  return (/\bwk\b/.test(t) || /weken/.test(t)) ? val : val / 5;
+}
+const TOTAAL_WEKEN = ALLE_STAPPEN.reduce((sum, s) => sum + duurNaarWeken(s.tijd), 0);
+/* Einddatum = startdatum + totale (uiterste) doorlooptijd van alle stappen. */
+function einddatumVan(start?: string): string | null {
+  if (!start) return null;
+  const d = new Date(start);
+  if (isNaN(d.getTime())) return null;
+  d.setDate(d.getDate() + Math.round(TOTAAL_WEKEN * 7));
+  return d.toISOString().slice(0, 10);
+}
+const MS_WEEK = 1000 * 60 * 60 * 24 * 7;
 const STAP_STATUS = ['Niet gestart', 'Loopt', 'Gereed', 'N.v.t.'];
 const STAP_KLEUR: Record<string, string> = { 'Gereed': 'var(--g-fg)', 'Loopt': 'var(--r-fg)', 'N.v.t.': 'var(--text-4)', 'Niet gestart': 'var(--border-md)' };
 /* Per stap, per boring: status + eigenaar + plandatum + deadline + afgerond. */
@@ -209,7 +228,7 @@ type Persoon = { id: string; naam: string };
 type ColId =
   | 'boring_nr' | 'werkpakket_nr' | 'locatie' | 'lengte_m' | 'type_boring' | 'aannemer' | 'klasse'
   | 'prioritering' | 'oplevering_toolgate' | 'projectfase' | 'engineeringsfase'
-  | 'fase0' | 'faseG' | 'fase1' | 'fase2'
+  | 'startdatum' | 'fase0' | 'faseG' | 'fase1' | 'fase2' | 'einddatum' | 'actieve_stap'
   | 'aanlevering_compleet' | 'ter_controle_uitvoering' | 'retour_uitvoering' | 'schouw_uitgevoerd'
   | 'opmerkingen_uitvoering' | 'planning_apds' | 'ontwerp_pct' | 'tek_pct' | 'status_werkterrein'
   | 'status_berekening' | 'sondering_nr' | 'sondering_aangevraagd' | 'sondering_retour'
@@ -218,7 +237,7 @@ type ColId =
 const DEFAULT_COL_ORDER: ColId[] = [
   'boring_nr', 'werkpakket_nr', 'locatie', 'lengte_m', 'type_boring', 'aannemer', 'klasse',
   'prioritering', 'oplevering_toolgate', 'projectfase', 'engineeringsfase',
-  'fase0', 'faseG', 'fase1', 'fase2',
+  'startdatum', 'fase0', 'faseG', 'fase1', 'fase2', 'einddatum', 'actieve_stap',
   'aanlevering_compleet', 'ter_controle_uitvoering', 'retour_uitvoering', 'schouw_uitgevoerd',
   'opmerkingen_uitvoering', 'planning_apds', 'ontwerp_pct', 'tek_pct', 'status_werkterrein',
   'status_berekening', 'sondering_nr', 'sondering_aangevraagd', 'sondering_retour',
@@ -232,7 +251,7 @@ const DEFAULT_HIDDEN: ColId[] = [
   'status_berekening', 'sondering_nr', 'sondering_aangevraagd', 'sondering_retour',
   'raakvlak', 'opmerking_extra', 'case_nr', 'bundel_configuratie',
 ];
-const COL_ORDER_KEY = 'hvp_lemmer_colorder_v4';
+const COL_ORDER_KEY = 'hvp_lemmer_colorder_v5';
 const HIDDEN_KEY = 'hvp_lemmer_hidden_v4';
 /* Koppeling fase-kolom → index in PROCES_FASEN */
 const FASE_COL: Record<string, number> = { fase0: 0, faseG: 1, fase1: 2, fase2: 3 };
@@ -328,6 +347,13 @@ export default function LemmerPage() {
   };
   const stapDone = (sd: StapData) => sd.afgerond === true || sd.status === 'Gereed';
   const stappenGereed = (d: LemmerBoring) => ALLE_STAPPEN.filter(s => stapDone(getStap(d, s.id))).length;
+  /* De stap waar nu actief aan gewerkt wordt: eerst een stap met status 'Loopt',
+     anders de eerstvolgende nog niet afgeronde stap (N.v.t. overslaan). */
+  const activeStap = (d: LemmerBoring): { step: ProcesStap; sd: StapData } | null => {
+    const lopend = ALLE_STAPPEN.find(s => getStap(d, s.id).status === 'Loopt');
+    const next = lopend ?? ALLE_STAPPEN.find(s => { const sd = getStap(d, s.id); return !stapDone(sd) && sd.status !== 'N.v.t.'; });
+    return next ? { step: next, sd: getStap(d, next.id) } : null;
+  };
 
   /* Afgeleide status uit ontwerp % (voor de KPI-kaarten). */
   const rowStatus = (d: LemmerBoring) =>
@@ -465,10 +491,39 @@ export default function LemmerPage() {
     oplevering_toolgate: textCol('Oplevering Toolgate', 'oplevering_toolgate', { wide: true }),
     projectfase: textCol('Projectfase', 'projectfase'),
     engineeringsfase: textCol('Engineeringsfase', 'engineeringsfase', { wide: true }),
+    startdatum: dateCol('Startdatum', 'startdatum'),
     fase0: faseCol('Fase 0', 'fase0'),
     faseG: faseCol('Gate', 'faseG'),
     fase1: faseCol('Fase 1', 'fase1'),
     fase2: faseCol('Fase 2', 'fase2'),
+    einddatum: { label: 'Einddatum (auto)', cell: d => {
+      const e = einddatumVan(d.startdatum);
+      return <td style={{ fontSize: 11, whiteSpace: 'nowrap', color: e ? 'var(--text-2)' : 'var(--text-4)', fontWeight: e ? 500 : 400 }}
+        title={e ? `Startdatum + ${Math.round(TOTAAL_WEKEN)} wk doorlooptijd` : 'Vul eerst een startdatum in'}>{e ? fmtDate(e) : '—'}</td>;
+    } },
+    actieve_stap: { label: 'Actieve stap', cell: d => {
+      const a = activeStap(d);
+      if (!a) return <td style={{ color: 'var(--text-4)', fontSize: 11 }}>{stappenGereed(d) === ALLE_STAPPEN.length ? 'Alles gereed' : '—'}</td>;
+      const { step, sd } = a;
+      const wk = sd.plandatum ? Math.round((new Date(sd.plandatum).getTime() - Date.now()) / MS_WEEK) : null;
+      return (
+        <td style={{ minWidth: 230 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <div style={{ fontSize: 12, color: 'var(--text-2)', fontWeight: 500, whiteSpace: 'nowrap' }}>
+              <span style={{ color: 'var(--accent)', fontWeight: 700 }}>{step.nr}.</span> {step.titel}
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10, color: 'var(--text-4)', whiteSpace: 'nowrap' }}>
+              <span>{sd.eigenaar || 'geen eigenaar'}</span><span>·</span>
+              <span>{sd.plandatum ? fmtDate(sd.plandatum) : 'geen plandatum'}</span>
+              {wk !== null && (wk < 0
+                ? <span className="wk-chip wk-over">{Math.abs(wk)}w te laat</span>
+                : wk <= 4 ? <span className="wk-chip wk-warn">{wk}w</span>
+                  : <span className="wk-chip wk-ok">{wk}w</span>)}
+            </div>
+          </div>
+        </td>
+      );
+    } },
     planning_apds: dateCol("Planning APD's", 'planning_apds'),
     aanlevering_compleet: dateCol('Aanlevering compleet', 'aanlevering_compleet'),
     ter_controle_uitvoering: dateCol('Ter controle uitvoering', 'ter_controle_uitvoering'),
@@ -753,6 +808,7 @@ export default function LemmerPage() {
             <F label="Oplevering Toolgate"><input className="field-input" value={form.oplevering_toolgate ?? ''} onChange={e => setForm(f => ({ ...f, oplevering_toolgate: e.target.value }))} /></F>
             <F label="Projectfase"><input className="field-input" value={form.projectfase ?? ''} onChange={e => setForm(f => ({ ...f, projectfase: e.target.value }))} /></F>
             <F label="Engineeringsfase"><input className="field-input" value={form.engineeringsfase ?? ''} onChange={e => setForm(f => ({ ...f, engineeringsfase: e.target.value }))} /></F>
+            <F label="Startdatum"><DateInput value={form.startdatum} onChange={v => setForm(f => ({ ...f, startdatum: v }))} /></F>
             <div style={{ gridColumn: '1/-1', height: '0.5px', background: 'var(--border)' }} />
             <F label="Aanlevering compleet"><DateInput value={form.aanlevering_compleet} onChange={v => setForm(f => ({ ...f, aanlevering_compleet: v }))} /></F>
             <F label="Ter controle uitvoering"><DateInput value={form.ter_controle_uitvoering} onChange={v => setForm(f => ({ ...f, ter_controle_uitvoering: v }))} /></F>
