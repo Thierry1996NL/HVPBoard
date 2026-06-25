@@ -230,10 +230,10 @@ const DEFAULT_HIDDEN: ColId[] = [
   'aanlevering_compleet', 'ter_controle_uitvoering', 'retour_uitvoering', 'schouw_uitgevoerd',
   'opmerkingen_uitvoering', 'ontwerp_pct', 'tek_pct', 'status_werkterrein',
   'status_berekening', 'sondering_nr', 'sondering_aangevraagd', 'sondering_retour',
-  'raakvlak', 'opmerking_extra', 'case_nr',
+  'raakvlak', 'opmerking_extra', 'case_nr', 'bundel_configuratie',
 ];
 const COL_ORDER_KEY = 'hvp_lemmer_colorder_v4';
-const HIDDEN_KEY = 'hvp_lemmer_hidden_v3';
+const HIDDEN_KEY = 'hvp_lemmer_hidden_v4';
 /* Koppeling fase-kolom → index in PROCES_FASEN */
 const FASE_COL: Record<string, number> = { fase0: 0, faseG: 1, fase1: 2, fase2: 3 };
 
