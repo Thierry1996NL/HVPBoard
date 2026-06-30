@@ -335,7 +335,7 @@ export default function ProjectenPage() {
                   };
 
                   return (
-                    <tr key={p.row_idx} style={{ cursor: 'pointer', opacity: projGereed ? 0.55 : 1, background: projGereed ? 'var(--n-bg, #f1f5f9)' : undefined }} onClick={() => router.push(`/project/${p.row_idx}`)}>
+                    <tr key={p.row_idx} style={{ cursor: 'pointer', opacity: projGereed ? 0.55 : 1, background: projGereed ? 'var(--n-bg, #f1f5f9)' : undefined }} onClick={() => router.push(`/lemmer?wp=${p.row_idx}`)}>
                       {visibleCols.map(col => {
                         const val = col.i === 179 ? (cd['179'] || cd['8'] || '') : (cd[String(col.i)] ?? '');
                         const isStatus = isStatusCol(col.i);
