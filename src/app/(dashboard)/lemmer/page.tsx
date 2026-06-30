@@ -244,7 +244,7 @@ type Persoon = { id: string; naam: string };
 type ColId =
   | 'boring_nr' | 'werkpakket_nr' | 'locatie' | 'lengte_m' | 'type_boring' | 'aannemer' | 'klasse'
   | 'prioritering' | 'oplevering_toolgate' | 'projectfase' | 'engineeringsfase'
-  | 'startdatum' | 'fase0' | 'faseG' | 'fase1' | 'fase2' | 'einddatum' | 'eind_weken' | 'actieve_stap'
+  | 'startdatum' | 'fase0' | 'faseG' | 'fase1' | 'fase2' | 'einddatum' | 'eind_weken' | 'actieve_stap' | 'actieve_eigenaar'
   | 'aanlevering_compleet' | 'ter_controle_uitvoering' | 'retour_uitvoering' | 'schouw_uitgevoerd'
   | 'opmerkingen_uitvoering' | 'planning_apds' | 'ontwerp_pct' | 'tek_pct' | 'status_werkterrein'
   | 'status_berekening' | 'sondering_nr' | 'sondering_aangevraagd' | 'sondering_retour'
@@ -253,7 +253,7 @@ type ColId =
 const DEFAULT_COL_ORDER: ColId[] = [
   'boring_nr', 'werkpakket_nr', 'locatie', 'lengte_m', 'type_boring', 'klasse', 'aannemer',
   'prioritering', 'oplevering_toolgate', 'projectfase', 'engineeringsfase',
-  'startdatum', 'fase0', 'faseG', 'fase1', 'fase2', 'einddatum', 'eind_weken', 'actieve_stap', 'opmerking_extra',
+  'startdatum', 'fase0', 'faseG', 'fase1', 'fase2', 'einddatum', 'eind_weken', 'actieve_stap', 'actieve_eigenaar', 'opmerking_extra',
   'aanlevering_compleet', 'ter_controle_uitvoering', 'retour_uitvoering', 'schouw_uitgevoerd',
   'opmerkingen_uitvoering', 'planning_apds', 'ontwerp_pct', 'tek_pct', 'status_werkterrein',
   'status_berekening', 'sondering_nr', 'sondering_aangevraagd', 'sondering_retour',
@@ -267,7 +267,7 @@ const DEFAULT_HIDDEN: ColId[] = [
   'status_berekening', 'sondering_nr', 'sondering_aangevraagd', 'sondering_retour',
   'raakvlak', 'case_nr', 'bundel_configuratie',
 ];
-const COL_ORDER_KEY = 'hvp_lemmer_colorder_v9';
+const COL_ORDER_KEY = 'hvp_lemmer_colorder_v10';
 const HIDDEN_KEY = 'hvp_lemmer_hidden_v6';
 /* Koppeling fase-kolom → index in PROCES_FASEN */
 const FASE_COL: Record<string, number> = { fase0: 0, faseG: 1, fase1: 2, fase2: 3 };
@@ -441,6 +441,7 @@ export default function LemmerPage() {
       return String(Math.round((new Date(e).getTime() - Date.now()) / (1000 * 60 * 60 * 24 * 7)));
     }
     if (id === 'actieve_stap') { const a = activeStap(d); return a ? `${a.step.nr} ${a.step.titel}` : ''; }
+    if (id === 'actieve_eigenaar') { const a = activeStap(d); return a?.sd.eigenaar ?? ''; }
     return String(d[id as keyof LemmerBoring] ?? '');
   };
 
@@ -550,6 +551,18 @@ export default function LemmerPage() {
     },
   });
 
+  /* Weken-chip: kleur op basis van de ECHTE datum. Deadline vandaag of voorbij = rood. */
+  const wkChip = (deadline?: string | null): React.ReactNode => {
+    if (!deadline) return null;
+    const d0 = new Date(deadline); d0.setHours(0, 0, 0, 0);
+    const t0 = new Date(); t0.setHours(0, 0, 0, 0);
+    const dagen = Math.round((d0.getTime() - t0.getTime()) / 86400000);
+    const wk = Math.round((new Date(deadline).getTime() - Date.now()) / MS_WEEK);
+    if (dagen < 0) return <span className="wk-chip wk-over">{Math.abs(wk) >= 1 ? `${Math.abs(wk)}w te laat` : 'te laat'}</span>;
+    if (dagen === 0) return <span className="wk-chip wk-over">vandaag</span>;
+    return wk <= 2 ? <span className="wk-chip wk-warn">{wk}w</span> : <span className="wk-chip wk-ok">{wk}w</span>;
+  };
+
   const columns: Record<ColId, { label: string; sortKey?: keyof LemmerBoring; cell: (d: LemmerBoring) => React.ReactNode }> = {
     boring_nr: { label: 'Boor nr', sortKey: 'boring_nr', cell: d => (
       <InlineCell type="text" value={d.boring_nr} tdStyle={{ fontWeight: 600 }}
@@ -604,18 +617,12 @@ export default function LemmerPage() {
       const deadlines = ALLE_STAPPEN.map(s => getStap(d, s.id).deadline).filter(Boolean) as string[];
       const e = deadlines.length ? deadlines.reduce((a, b) => (a > b ? a : b)) : einddatumVan(d.startdatum);
       if (!e) return <td style={{ color: 'var(--text-4)', fontSize: 11 }}>—</td>;
-      const wk = Math.round((new Date(e).getTime() - Date.now()) / MS_WEEK);
-      return <td style={{ whiteSpace: 'nowrap' }}>
-        {wk < 0 ? <span className="wk-chip wk-over">{Math.abs(wk)}w te laat</span>
-          : wk <= 2 ? <span className="wk-chip wk-warn">{wk}w</span>
-            : <span className="wk-chip wk-ok">{wk}w</span>}
-      </td>;
+      return <td style={{ whiteSpace: 'nowrap' }}>{wkChip(e)}</td>;
     } },
     actieve_stap: { label: 'Actieve stap', cell: d => {
       const a = activeStap(d);
       if (!a) return <td style={{ color: 'var(--text-4)', fontSize: 11 }}>{stappenGereed(d) === ALLE_STAPPEN.length ? 'Alles gereed' : '—'}</td>;
       const { step, sd } = a;
-      const wk = sd.deadline ? Math.round((new Date(sd.deadline).getTime() - Date.now()) / MS_WEEK) : null;
       return (
         <td style={{ minWidth: 230 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -625,16 +632,17 @@ export default function LemmerPage() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10, color: 'var(--text-4)', whiteSpace: 'nowrap' }}>
               <span>{sd.eigenaar || 'geen eigenaar'}</span><span>·</span>
               <span>{sd.deadline ? fmtDate(sd.deadline) : 'geen deadline'}</span>
-              {wk !== null && (wk < 0
-                ? <span className="wk-chip wk-over">{Math.abs(wk)}w te laat</span>
-                : wk <= 2 ? <span className="wk-chip wk-warn">{wk}w</span>
-                  : <span className="wk-chip wk-ok">{wk}w</span>)}
+              {wkChip(sd.deadline)}
             </div>
           </div>
         </td>
       );
     } },
     planning_apds: dateCol("Planning APD's", 'planning_apds'),
+    actieve_eigenaar: { label: 'Eigenaar actieve stap', cell: d => {
+      const a = activeStap(d);
+      return <td style={{ whiteSpace: 'nowrap', color: 'var(--text-2)' }}>{a?.sd.eigenaar || '—'}</td>;
+    } },
     aanlevering_compleet: dateCol('Aanlevering compleet', 'aanlevering_compleet'),
     ter_controle_uitvoering: dateCol('Ter controle uitvoering', 'ter_controle_uitvoering'),
     retour_uitvoering: dateCol('Retour ontvangen', 'retour_uitvoering'),
@@ -890,10 +898,12 @@ export default function LemmerPage() {
                                       {faseOpen && f.stappen.map(s => {
                                         const sd = getStap(d, s.id);
                                         const dot = STAP_KLEUR[sd.status ?? ''] ?? 'var(--border-md)';
-                                        const wk = (sd.deadline && !sd.afgerond)
-                                          ? Math.round((new Date(sd.deadline).getTime() - Date.now()) / (1000 * 60 * 60 * 24 * 7))
-                                          : null;
-                                        const teLaat = wk !== null && wk < 0 && !stapDone(sd) && sd.status !== 'N.v.t.';
+                                        const teLaat = (() => {
+                                          if (!sd.deadline || stapDone(sd) || sd.status === 'N.v.t.') return false;
+                                          const d0 = new Date(sd.deadline); d0.setHours(0, 0, 0, 0);
+                                          const t0 = new Date(); t0.setHours(0, 0, 0, 0);
+                                          return d0.getTime() <= t0.getTime();
+                                        })();
                                         return (
                                           <tr className="lem-step-row" key={s.id}
                                             style={teLaat ? { background: 'var(--b-bg)', boxShadow: 'inset 3px 0 0 var(--b-fg)' } : undefined}>
@@ -933,13 +943,9 @@ export default function LemmerPage() {
                                             <td style={{ whiteSpace: 'nowrap' }}>
                                               {sd.afgerond
                                                 ? <span className="wk-chip wk-ok">afgerond</span>
-                                                : wk === null
-                                                  ? <span style={{ color: 'var(--text-4)', fontSize: 11 }}>—</span>
-                                                  : wk < 0
-                                                    ? <span className="wk-chip wk-over">{Math.abs(wk)}w te laat</span>
-                                                    : wk <= 2
-                                                      ? <span className="wk-chip wk-warn">{wk}w</span>
-                                                      : <span className="wk-chip wk-ok">{wk}w</span>}
+                                                : sd.deadline
+                                                  ? wkChip(sd.deadline)
+                                                  : <span style={{ color: 'var(--text-4)', fontSize: 11 }}>—</span>}
                                             </td>
                                             <td style={{ textAlign: 'center' }}>
                                               <input type="checkbox" checked={!!sd.afgerond} style={{ width: 15, height: 15, cursor: 'pointer', accentColor: 'var(--accent)' }}
