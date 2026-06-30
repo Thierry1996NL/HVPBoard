@@ -93,3 +93,23 @@ export function projectHealth(bors: BoringProces[]): Health {
   }
   return geel ? 'geel' : 'groen';
 }
+
+export type Opdrachtgever = 'Pol' | 'Heijmans' | 'Voskuilen';
+export const OPDRACHTGEVERS: Opdrachtgever[] = ['Pol', 'Heijmans', 'Voskuilen'];
+
+/* VOORBEELD-intakeformule — bepaalt de opdrachtgever uit klasse (tonnage) + lengte.
+   Gebaseerd op de rig-uitgangspunten (Heijmans heeft de zware rigs; de 10-tons/9T
+   klasse gaat naar Pol (kort) of Voskuilen (tot 180 m)). Pas de grenzen aan naar
+   jullie eigen afspraken — dit is bewust één centrale plek. */
+export function bepaalOpdrachtgever(klasse?: string | null, lengte?: number | null): Opdrachtgever | null {
+  const k = (klasse ?? '').toUpperCase().replace(/\s/g, '');
+  const L = typeof lengte === 'number' ? lengte : null;
+  // Zware klassen: alleen Heijmans heeft deze boorstellingen
+  if (['17T', '27T', '50T', '80T', '120T'].includes(k)) return 'Heijmans';
+  // Lichte klasse (9T / 10-ton): Pol voor de korte, Voskuilen voor de langere (tot 180 m)
+  if (k === '9T') {
+    if (L === null) return 'Pol';
+    return L <= 150 ? 'Pol' : 'Voskuilen';
+  }
+  return null; // onbekende klasse → handmatig kiezen
+}

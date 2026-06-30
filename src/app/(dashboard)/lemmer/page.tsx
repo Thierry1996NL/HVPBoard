@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect, useCallback, Fragment } from 'react';
 import { useToast } from '@/components/ui/ToastProvider';
 import Modal from '@/components/ui/Modal';
 import { createClient } from '@/lib/supabase/client';
+import { bepaalOpdrachtgever, OPDRACHTGEVERS } from '@/lib/proces';
 
 /* ── Inline tabel-bouwstenen (zelfstandig, geen extra importbestand) ─────────── */
 const STATUS_COLORS: Record<string, { bg: string; fg: string; pct: number; label: string }> = {
@@ -160,6 +161,7 @@ interface LemmerBoring {
   raakvlak?: string;
   opmerking_extra?: string;
   vervallen?: boolean;
+  intake_compleet?: boolean;
   gereed?: boolean;
   startdatum?: string;
   stappen?: Record<string, StapData>;
@@ -248,7 +250,7 @@ type ColId =
   | 'aanlevering_compleet' | 'ter_controle_uitvoering' | 'retour_uitvoering' | 'schouw_uitgevoerd'
   | 'opmerkingen_uitvoering' | 'planning_apds' | 'ontwerp_pct' | 'tek_pct' | 'status_werkterrein'
   | 'status_berekening' | 'sondering_nr' | 'sondering_aangevraagd' | 'sondering_retour'
-  | 'bundel_configuratie' | 'raakvlak' | 'opmerking_extra' | 'case_nr' | 'gereed' | 'project';
+  | 'bundel_configuratie' | 'raakvlak' | 'opmerking_extra' | 'case_nr' | 'gereed' | 'project' | 'voorstel';
 
 const DEFAULT_COL_ORDER: ColId[] = [
   'boring_nr', 'werkpakket_nr', 'locatie', 'lengte_m', 'type_boring', 'klasse', 'aannemer',
@@ -320,6 +322,8 @@ export default function LemmerPage() {
   }, []);
   useEffect(() => { localStorage.setItem('hvp_module_wp', String(wp)); }, [wp]);
   const project = PROJECTEN.find(p => p.wp === wp) ?? PROJECTEN[0];
+  const [intakeMode, setIntakeMode] = useState(false);
+  const [intakeKeuze, setIntakeKeuze] = useState<Record<string, string>>({});
   const [kpi, setKpi]         = useState<string>('actief');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const toggleExpand = (id: string) => setExpanded(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
@@ -366,7 +370,12 @@ export default function LemmerPage() {
   const toggleHidden = (id: ColId) => setHidden(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const allVisible = hidden.size === 0;
   const toggleAlleKolommen = () => setHidden(allVisible ? new Set(DEFAULT_HIDDEN) : new Set());
-  const visibleCols = (wp === 0 ? (['project', ...columnOrder.filter(id => !hidden.has(id))] as ColId[]) : columnOrder.filter(id => !hidden.has(id)));
+  const baseCols = columnOrder.filter(id => !hidden.has(id));
+  const visibleCols = ([
+    ...(wp === 0 ? ['project'] : []),
+    ...(intakeMode ? ['voorstel'] : []),
+    ...baseCols,
+  ] as ColId[]);
 
   const onDragStart = (e: React.DragEvent, id: ColId) => { setDragCol(id); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', id); };
   const onDragOver  = (e: React.DragEvent, id: ColId) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; if (id !== dragOverCol) setDragOverCol(id); };
@@ -463,6 +472,8 @@ export default function LemmerPage() {
   const rows = useMemo(() => {
     let r = data.filter(d => {
       if (wp !== 0 && d.werkpakket_id !== wp) return false;
+      if (intakeMode) { if (d.intake_compleet === true) return false; }
+      else { if (d.intake_compleet !== true) return false; }
       if (kpi === 'vervallen') { if (!d.vervallen) return false; }
       else { if (d.vervallen) return false; if (kpi !== 'actief' && boringHealth(d) !== kpi) return false; }
       if (search) {
@@ -479,7 +490,21 @@ export default function LemmerPage() {
     if (fEntries.length) r = r.filter(d => fEntries.every(([id, v]) =>
       colFilterValue(d, id as ColId).toLowerCase().includes((v as string).trim().toLowerCase())));
     return r;
-  }, [data, search, kpi, sortCol, sortDir, colFilters, wp]);
+  }, [data, search, kpi, sortCol, sortDir, colFilters, wp, intakeMode]);
+
+  /* Aantal boringen dat nog in de intake staat (huidig project of alle). */
+  const intakeCount = useMemo(
+    () => data.filter(d => (wp === 0 || d.werkpakket_id === wp) && !d.vervallen && d.intake_compleet !== true).length,
+    [data, wp]
+  );
+
+  /* Boring doorzetten: opdrachtgever vastleggen + intake afronden → komt in het project. */
+  const doorzetten = async (d: LemmerBoring) => {
+    const keuze = intakeKeuze[d.id] ?? bepaalOpdrachtgever(d.klasse, d.lengte_m) ?? '';
+    if (!keuze) { toast('Kies eerst een opdrachtgever', 'error'); return; }
+    try { await save(d.id, { aannemer: keuze, intake_compleet: true } as Partial<LemmerBoring>); toast(`✓ Doorgezet naar ${keuze}`, 'success'); }
+    catch (e) { toast((e as Error).message, 'error'); }
+  };
 
   const openEdit = (id?: string) => {
     const d = id ? data.find(x => x.id === id) : undefined;
@@ -671,6 +696,10 @@ export default function LemmerPage() {
         {PROJECTEN.find(p => p.wp === d.werkpakket_id)?.naam ?? '—'}
       </td>
     ) },
+    voorstel: { label: 'Voorstel opdrachtgever', cell: d => {
+      const v = bepaalOpdrachtgever(d.klasse, d.lengte_m);
+      return <td style={{ whiteSpace: 'nowrap', fontWeight: 600, color: v ? 'var(--accent)' : 'var(--text-4)' }}>{v ?? 'handmatig'}</td>;
+    } },
     gereed: { label: 'Gereed', cell: d => (
       <td style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
         <button className="btn" onClick={() => saveField(d.id, { gereed: !d.gereed })}
@@ -777,6 +806,11 @@ export default function LemmerPage() {
         <button className="btn" onClick={handleOpslaan} disabled={opslaan} style={{ fontSize: 11 }} title="Synchroniseren met de database (wijzigingen worden al automatisch opgeslagen)">
           {opslaan ? '… Opslaan' : '💾 Opslaan'}
         </button>
+        <button className="btn" onClick={() => setIntakeMode(m => !m)}
+          style={{ fontSize: 11, ...(intakeMode ? { borderColor: 'var(--accent)', color: 'var(--accent)', fontWeight: 700 } : {}) }}
+          title="Boringen die nog beoordeeld en doorgezet moeten worden">
+          📥 {intakeMode ? 'Terug naar project' : `Intake${intakeCount ? ` (${intakeCount})` : ''}`}
+        </button>
         <div style={{ flex: 1 }} />
         <div style={{ position: 'relative' }}>
           <button className="btn" onClick={() => setColPickerOpen(o => !o)} style={{ fontSize: 11 }} title="Kies welke kolommen zichtbaar zijn">
@@ -847,7 +881,7 @@ export default function LemmerPage() {
             </thead>
             <tbody>
               {rows.length === 0 ? (
-                <tr><td colSpan={visibleCols.length + 2}><div className="empty-state"><strong>Geen boringen gevonden</strong>Pas de filters aan.</div></td></tr>
+                <tr><td colSpan={visibleCols.length + 2}><div className="empty-state"><strong>{intakeMode ? 'Geen boringen in de intake' : 'Geen boringen gevonden'}</strong>{intakeMode ? 'Alles is doorgezet naar het project.' : 'Pas de filters aan.'}</div></td></tr>
               ) : rows.map(d => {
                 const isOpen = expanded.has(d.id);
                 return (
@@ -867,7 +901,20 @@ export default function LemmerPage() {
                       </td>
                       {visibleCols.map(id => <Fragment key={id}>{columns[id].cell(d)}</Fragment>)}
                       <td onClick={e => e.stopPropagation()}>
-                        <button className="btn" style={{ fontSize: 11, padding: '2px 8px' }} onClick={() => openEdit(d.id)}>✎</button>
+                        {intakeMode ? (
+                          <div style={{ display: 'flex', gap: 6, alignItems: 'center', whiteSpace: 'nowrap' }}>
+                            <select className="inline-edit" style={{ fontSize: 11, minWidth: 96 }}
+                              value={intakeKeuze[d.id] ?? bepaalOpdrachtgever(d.klasse, d.lengte_m) ?? ''}
+                              onChange={e => setIntakeKeuze(k => ({ ...k, [d.id]: e.target.value }))}>
+                              <option value="">— kies —</option>
+                              {OPDRACHTGEVERS.map(o => <option key={o} value={o}>{o}</option>)}
+                            </select>
+                            <button className="btn btn-primary" style={{ fontSize: 11, padding: '2px 10px', whiteSpace: 'nowrap' }}
+                              onClick={() => doorzetten(d)} title="Opdrachtgever vastleggen en in het project plaatsen">Doorzetten →</button>
+                          </div>
+                        ) : (
+                          <button className="btn" style={{ fontSize: 11, padding: '2px 8px' }} onClick={() => openEdit(d.id)}>✎</button>
+                        )}
                       </td>
                     </tr>
                     {isOpen && (
