@@ -310,7 +310,14 @@ export default function LemmerPage() {
 
   const [search, setSearch]   = useState('');
   const [wp, setWp]           = useState<number>(2);
-  useEffect(() => { const v = localStorage.getItem('hvp_module_wp'); if (v) setWp(Number(v)); }, []);
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const wpParam = params.get('wp');
+    const health = params.get('health');
+    if (wpParam) setWp(Number(wpParam));
+    else { const v = localStorage.getItem('hvp_module_wp'); if (v) setWp(Number(v)); }
+    if (health && ['groen', 'geel', 'rood'].includes(health)) setKpi(health);
+  }, []);
   useEffect(() => { localStorage.setItem('hvp_module_wp', String(wp)); }, [wp]);
   const project = PROJECTEN.find(p => p.wp === wp) ?? PROJECTEN[0];
   const [kpi, setKpi]         = useState<string>('actief');

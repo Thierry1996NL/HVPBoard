@@ -10,7 +10,7 @@ import Modal from '@/components/ui/Modal';
 import { STATUS_VALUES, statusClass } from '@/lib/constants';
 import { getProjectNaam, getEngineer, getProjectStatus, getProgressPercent } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
-import { stappenGereed, eersteOpenDeadline, projectHealth, boringHealth, ALLE_STAPPEN, type BoringProces, type Health } from '@/lib/proces';
+import { boringHealth, type BoringProces, type Health } from '@/lib/proces';
 import type { Werkpakket, CelData, StatusValue } from '@/types';
 
 interface BoringRow extends BoringProces {
@@ -21,10 +21,11 @@ interface BoringRow extends BoringProces {
 export interface ProjectSummary {
   totaal: number;
   health: Health;
-  voortgangPct: number;        // % stappen gereed over alle actieve boringen
-  vrijgegeven: number;         // boringen met ontwerp goedgekeurd/vrijgegeven
-  eersteDeadline: string | null;
-  weekenRest: number | null;
+  groen: number;
+  geel: number;
+  rood: number;
+  gereed: number;
+  vervallen: number;
 }
 
 /* Samenvatting per project op basis van de boringen + het stappen-proces. */
@@ -44,22 +45,17 @@ function useBoringSummaries() {
       if (!byProject.has(b.werkpakket_id)) byProject.set(b.werkpakket_id, []);
       byProject.get(b.werkpakket_id)!.push(b);
     }
-    const TOT = ALLE_STAPPEN.length;
     byProject.forEach((bors, pid) => {
       const active = bors.filter(b => !b.vervallen);
-      const vrijgegeven = active.filter(b => ['Vrijgegeven', 'Goedgekeurd'].includes(b.status_ontwerp ?? '')).length;
-      const gereedTot = active.reduce((sum, b) => sum + stappenGereed(b), 0);
-      const voortgangPct = active.length ? Math.round((gereedTot / (active.length * TOT)) * 100) : 0;
-      // Meest urgente openstaande stap-deadline over alle boringen
-      let eerste: string | null = null;
+      const vervallen = bors.length - active.length;
+      const gereed = active.filter(b => b.engineering_afgerond).length;
+      let groen = 0, geel = 0, rood = 0;
       for (const b of active) {
-        const d = eersteOpenDeadline(b);
-        if (d && (eerste === null || d < eerste)) eerste = d;
+        const h = boringHealth(b);
+        if (h === 'rood') rood++; else if (h === 'geel') geel++; else groen++;
       }
-      const weekenRest = eerste
-        ? Math.round((new Date(eerste).getTime() - Date.now()) / (1000 * 60 * 60 * 24 * 7))
-        : null;
-      map.set(pid, { totaal: active.length, health: projectHealth(active), voortgangPct, vrijgegeven, eersteDeadline: eerste, weekenRest });
+      const health: Health = rood > 0 ? 'rood' : geel > 0 ? 'geel' : 'groen';
+      map.set(pid, { totaal: active.length, health, groen, geel, rood, gereed, vervallen });
     });
     return map;
   }, [boringen]);
@@ -115,7 +111,7 @@ export default function ProjectenPage() {
       if (showArchief && !isArchief) return false;
 
       if (filterEngineer && (cd['179'] || getEngineer(cd)) !== filterEngineer) return false;
-      if (filterStatus && getProjectStatus(cd) !== filterStatus) return false;
+      if (filterStatus && (boringSummaries.get(p.row_idx)?.health ?? 'groen') !== filterStatus) return false;
 
       if (search) {
         const q = search.toLowerCase();
@@ -125,7 +121,7 @@ export default function ProjectenPage() {
 
       return true;
     });
-  }, [projects, search, filterEngineer, filterStatus, showArchief]);
+  }, [projects, search, filterEngineer, filterStatus, showArchief, boringSummaries]);
 
   // KPI: stoplicht-rollup per project (consistent met Boringen-module)
   const kpi = useMemo(() => {
@@ -253,7 +249,7 @@ export default function ProjectenPage() {
             {engineers.map(e => <option key={e} value={e}>{e}</option>)}
           </select>
 
-          {/* Status filter */}
+          {/* Stoplicht-filter (uit de boringen) */}
           <select
             className="field-input"
             style={{ width: 'auto', minWidth: 140, padding: '4px 28px 4px 10px' }}
@@ -261,7 +257,9 @@ export default function ProjectenPage() {
             onChange={e => setFilterStatus(e.target.value)}
           >
             <option value="">Alle statussen</option>
-            {STATUS_VALUES.map(s => <option key={s} value={s}>{s}</option>)}
+            <option value="groen">Op schema</option>
+            <option value="geel">Aandacht</option>
+            <option value="rood">Te laat</option>
           </select>
 
           {/* Archief toggle */}
@@ -290,17 +288,18 @@ export default function ProjectenPage() {
                   <th key={col.i}>{col.n}</th>
                 ))}
                 <th>Boringen</th>
-                <th>Ontwerp ✓</th>
-                <th>Voortgang</th>
-                <th>Eerste deadline</th>
-                <th>Weken</th>
+                <th style={{ textAlign: 'center' }}>Op schema</th>
+                <th style={{ textAlign: 'center' }}>Aandacht</th>
+                <th style={{ textAlign: 'center' }}>Te laat</th>
+                <th>Gereed</th>
+                <th style={{ textAlign: 'center' }}>Vervallen</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={visibleCols.length + 6}>
+                  <td colSpan={visibleCols.length + 7}>
                     <div className="empty-state">
                       <strong>Geen projecten gevonden</strong>
                       Pas de filters aan of maak een nieuw project aan.
@@ -310,16 +309,33 @@ export default function ProjectenPage() {
               ) : (
                 rows.map(p => {
                   const cd = p.cel_data;
-                  const overallStatus = getProjectStatus(cd);
                   const bs = boringSummaries.get(p.row_idx);
+                  const projGereed = cd['gereed'] === '1';
+                  const gereedPct = bs && bs.totaal > 0 ? Math.round((bs.gereed / bs.totaal) * 100) : null;
 
-                  // Ontwerp % (Vrijgegeven + Goedgekeurd / totaal) + voortgang in stappen
-                  const ontwerpPct = bs && bs.totaal > 0 ? Math.round((bs.vrijgegeven / bs.totaal) * 100) : null;
-                  const voortgangPct = bs && bs.totaal > 0 ? bs.voortgangPct : null;
-                  const wk = bs?.weekenRest ?? null;
+                  const teller = (aantal: number, bucket: 'groen' | 'geel' | 'rood', kleur: string) => (
+                    <td style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+                      {bs && aantal > 0 ? (
+                        <button
+                          onClick={() => router.push(`/lemmer?wp=${p.row_idx}&health=${bucket}`)}
+                          title="Open in Boringen — gefilterd"
+                          style={{ cursor: 'pointer', border: 'none', background: 'transparent', fontSize: 14, fontWeight: 700, color: kleur, padding: '2px 8px', borderRadius: 6 }}
+                          onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-2, #f1f5f9)')}
+                          onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                        >{aantal}</button>
+                      ) : <span style={{ color: 'var(--text-4)', fontSize: 13 }}>{bs ? '0' : '—'}</span>}
+                    </td>
+                  );
+
+                  const toggleGereed = async () => {
+                    try {
+                      await updateCell(p.row_idx, 'gereed' as unknown as number, projGereed ? '0' : '1');
+                      toast(projGereed ? 'Project weer open' : '✓ Project gereed', 'success');
+                    } catch (e) { toast((e as Error).message, 'error'); }
+                  };
 
                   return (
-                    <tr key={p.row_idx} style={{ cursor: 'pointer' }} onClick={() => router.push(`/project/${p.row_idx}`)}>
+                    <tr key={p.row_idx} style={{ cursor: 'pointer', opacity: projGereed ? 0.55 : 1, background: projGereed ? 'var(--n-bg, #f1f5f9)' : undefined }} onClick={() => router.push(`/project/${p.row_idx}`)}>
                       {visibleCols.map(col => {
                         const val = col.i === 179 ? (cd['179'] || cd['8'] || '') : (cd[String(col.i)] ?? '');
                         const isStatus = isStatusCol(col.i);
@@ -339,57 +355,39 @@ export default function ProjectenPage() {
                         ) : <span style={{ color: 'var(--text-4)' }}>—</span>}
                       </td>
 
-                      {/* Ontwerp % vrijgegeven */}
+                      {/* Stoplicht-tellers — klikbaar naar de Boringen-module */}
+                      {teller(bs?.groen ?? 0, 'groen', 'var(--g-fg)')}
+                      {teller(bs?.geel ?? 0, 'geel', 'var(--r-fg)')}
+                      {teller(bs?.rood ?? 0, 'rood', 'var(--b-fg)')}
+
+                      {/* Boringen gereed — percentagebalk */}
                       <td>
-                        {ontwerpPct !== null ? (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        {gereedPct !== null ? (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }} title={`${bs!.gereed} van ${bs!.totaal} gereed`}>
                             <div style={{ width: 48, height: 4, borderRadius: 2, background: '#E5E7EB', overflow: 'hidden' }}>
-                              <div style={{ width: `${ontwerpPct}%`, height: '100%', borderRadius: 2,
-                                background: ontwerpPct === 100 ? '#1A7F3C' : ontwerpPct >= 75 ? '#8BC34A' : ontwerpPct >= 50 ? '#F5C842' : '#F5A623' }} />
+                              <div style={{ width: `${gereedPct}%`, height: '100%', borderRadius: 2, background: 'var(--g-fg)' }} />
                             </div>
-                            <span style={{ fontSize: 10, fontWeight: 600,
-                              color: ontwerpPct === 100 ? '#1A7F3C' : ontwerpPct >= 50 ? '#D97706' : '#991B1B', minWidth: 28 }}>
-                              {ontwerpPct}%
-                            </span>
+                            <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-2)', minWidth: 28 }}>{gereedPct}%</span>
                           </div>
                         ) : <span style={{ color: 'var(--text-4)', fontSize: 11 }}>—</span>}
                       </td>
 
-                      {/* Voortgang in stappen */}
-                      <td>
-                        {voortgangPct !== null ? (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <div style={{ width: 48, height: 4, borderRadius: 2, background: '#E5E7EB', overflow: 'hidden' }}>
-                              <div style={{ width: `${voortgangPct}%`, height: '100%', borderRadius: 2,
-                                background: voortgangPct === 100 ? '#1A7F3C' : voortgangPct >= 50 ? '#8BC34A' : '#3D6B9E' }} />
-                            </div>
-                            <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-2)', minWidth: 28 }}>{voortgangPct}%</span>
-                          </div>
-                        ) : <span style={{ color: 'var(--text-4)', fontSize: 11 }}>—</span>}
-                      </td>
-
-                      {/* Eerste deadline */}
-                      <td style={{ fontSize: 11, color: 'var(--text-3)', whiteSpace: 'nowrap' }}>
-                        {bs?.eersteDeadline
-                          ? new Date(bs.eersteDeadline).toLocaleDateString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric' })
-                          : <span style={{ color: 'var(--text-4)' }}>—</span>}
-                      </td>
-
-                      {/* Weken resterend */}
-                      <td>
-                        {wk !== null ? (
-                          <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 20, whiteSpace: 'nowrap',
-                            background: wk < 0 ? '#FEE2E2' : wk <= 2 ? '#FEF3C7' : '#D1FAE5',
-                            color: wk < 0 ? '#991B1B' : wk <= 2 ? '#92400E' : '#065F46',
-                            border: `0.5px solid ${wk < 0 ? '#FECACA' : wk <= 2 ? '#FDE68A' : '#A7F3D0'}` }}>
-                            {wk < 0 ? `${Math.abs(wk)}w te laat` : `${wk}w`}
-                          </span>
-                        ) : <span style={{ color: 'var(--text-4)', fontSize: 11 }}>—</span>}
+                      {/* Vervallen boringen */}
+                      <td style={{ textAlign: 'center' }}>
+                        {bs && bs.vervallen > 0
+                          ? <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-3)' }}>{bs.vervallen}</span>
+                          : <span style={{ color: 'var(--text-4)', fontSize: 13 }}>{bs ? '0' : '—'}</span>}
                       </td>
 
                       {/* Actions */}
                       <td onClick={e => e.stopPropagation()}>
-                        <div style={{ display: 'flex', gap: 4 }}>
+                        <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                          <button className="btn" onClick={toggleGereed}
+                            title={projGereed ? 'Project weer openen' : 'Project markeren als gereed'}
+                            style={{ padding: '3px 10px', fontSize: 11, fontWeight: 600,
+                              ...(projGereed ? { background: 'var(--g-bg)', color: 'var(--g-fg)', borderColor: 'var(--g-mid, var(--g-fg))' } : {}) }}>
+                            {projGereed ? '✓ Gereed' : 'Gereed'}
+                          </button>
                           <button className="btn" style={{ padding: '3px 8px', fontSize: 11 }}
                             onClick={() => router.push(`/project/${p.row_idx}`)}>Detail</button>
                           {mode === 'editor' && (
