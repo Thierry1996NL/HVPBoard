@@ -129,6 +129,7 @@ function InlineCell({
 /* ── Type ──────────────────────────────────────────────────────────────────── */
 interface LemmerBoring {
   id: string;
+  werkpakket_id?: number;
   case_nr?: string;
   boring_nr: string;
   projectfase?: string;
@@ -273,6 +274,18 @@ const FASE_COL: Record<string, number> = { fase0: 0, faseG: 1, fase1: 2, fase2: 
 /* Berekende kolommen zonder eigen databaseveld — niet filterbaar via de header. */
 const NIET_FILTERBAAR: ColId[] = ['fase0', 'faseG', 'fase1', 'fase2', 'einddatum', 'eind_weken', 'actieve_stap', 'gereed'];
 
+/* Alle projecten in deze module (werkpakket_id komt overeen met boringen.werkpakket_id). */
+interface ProjectDef { wp: number; naam: string; fase: string; case: string; pl: string; }
+const PROJECTEN: ProjectDef[] = [
+  { wp: 1, naam: 'Akkrum',      fase: 'UO', case: '311716',        pl: 'Patrick Kroneman' },
+  { wp: 2, naam: 'Lemmer-oost', fase: 'DO', case: '283147',        pl: 'Eelco Zijnstra' },
+  { wp: 3, naam: 'Wolvega',     fase: 'UO', case: '290538',        pl: 'Patrick Kroneman' },
+  { wp: 4, naam: 'Joure',       fase: 'DO', case: '247351',        pl: 'Patrick Kroneman' },
+  { wp: 5, naam: 'Urk-Zuid',    fase: 'DO', case: '295885',        pl: 'Patrick Kroneman / Thomas Burkels' },
+  { wp: 6, naam: 'Luinjeberd',  fase: 'DO', case: '—',             pl: 'Eelco Zijnstra' },
+  { wp: 7, naam: 'Urk WP2',     fase: 'UO', case: '254496/268298', pl: 'Patrick Kroneman' },
+];
+
 export default function LemmerPage() {
   const toast = useToast();
   const { data, loading, save, remove, refresh, personen, addPersoon, removePersoon } = useLemmerData();
@@ -296,6 +309,10 @@ export default function LemmerPage() {
   };
 
   const [search, setSearch]   = useState('');
+  const [wp, setWp]           = useState<number>(2);
+  useEffect(() => { const v = localStorage.getItem('hvp_module_wp'); if (v) setWp(Number(v)); }, []);
+  useEffect(() => { localStorage.setItem('hvp_module_wp', String(wp)); }, [wp]);
+  const project = PROJECTEN.find(p => p.wp === wp) ?? PROJECTEN[0];
   const [kpi, setKpi]         = useState<string>('actief');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const toggleExpand = (id: string) => setExpanded(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
@@ -410,14 +427,16 @@ export default function LemmerPage() {
   };
 
   const stats = useMemo(() => {
-    const a = data.filter(d => !d.vervallen);
+    const proj = data.filter(d => d.werkpakket_id === wp);
+    const a = proj.filter(d => !d.vervallen);
     let groen = 0, geel = 0, rood = 0;
     for (const d of a) { const h = boringHealth(d); if (h === 'rood') rood++; else if (h === 'geel') geel++; else groen++; }
-    return { totaal: a.length, groen, geel, rood, vervallen: data.filter(d => d.vervallen).length };
-  }, [data]);
+    return { totaal: a.length, groen, geel, rood, vervallen: proj.filter(d => d.vervallen).length };
+  }, [data, wp]);
 
   const rows = useMemo(() => {
     let r = data.filter(d => {
+      if (d.werkpakket_id !== wp) return false;
       if (kpi === 'vervallen') { if (!d.vervallen) return false; }
       else { if (d.vervallen) return false; if (kpi !== 'actief' && boringHealth(d) !== kpi) return false; }
       if (search) {
@@ -434,11 +453,11 @@ export default function LemmerPage() {
     if (fEntries.length) r = r.filter(d => fEntries.every(([id, v]) =>
       String(d[id as keyof LemmerBoring] ?? '').toLowerCase().includes((v as string).trim().toLowerCase())));
     return r;
-  }, [data, search, kpi, sortCol, sortDir, colFilters]);
+  }, [data, search, kpi, sortCol, sortDir, colFilters, wp]);
 
   const openEdit = (id?: string) => {
     const d = id ? data.find(x => x.id === id) : undefined;
-    setForm(d ? { ...d } : { vervallen: false });
+    setForm(d ? { ...d } : { vervallen: false, werkpakket_id: wp });
     setEditId(id ?? null);
     setModal(true);
   };
@@ -674,9 +693,20 @@ export default function LemmerPage() {
         .stat-card.stat-A .stat-num { color: var(--r-fg); }
         .stat-card.stat-R .stat-num { color: var(--b-fg); }
       `}</style>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 4 }}>
-        <h1 style={{ fontSize: 20, fontWeight: 600, margin: 0 }}>Lemmer</h1>
-        <span style={{ fontSize: 12, color: 'var(--text-4)' }}>Lemmer-oost · DO · case 283147 · Eelco Zijnstra</span>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 10 }}>
+        <h1 style={{ fontSize: 20, fontWeight: 600, margin: 0 }}>{project.naam}</h1>
+        <span style={{ fontSize: 12, color: 'var(--text-4)' }}>{project.fase} · case {project.case} · {project.pl}</span>
+      </div>
+
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 14 }}>
+        {PROJECTEN.map(p => (
+          <button key={p.wp} type="button" onClick={() => setWp(p.wp)}
+            className="btn"
+            style={{ fontSize: 12, padding: '5px 12px', fontWeight: p.wp === wp ? 700 : 500,
+              ...(p.wp === wp ? { background: 'var(--accent)', color: '#fff', borderColor: 'var(--accent)' } : {}) }}>
+            {p.naam}
+          </button>
+        ))}
       </div>
 
       <div className="stats-bar">
@@ -980,7 +1010,43 @@ function F({ label, children, span }: { label: string; children: React.ReactNode
   return <div style={{ gridColumn: span ? '1 / -1' : undefined }}><label className="field-label">{label}</label>{children}</div>;
 }
 
-/* Zelfstandige data-hook voor de losse tabel 'lemmer' (geen extra importbestand nodig). */
+/* ── Vertaallaag module ↔ boringen-tabel ───────────────────────────────────
+   Sommige module-velden heten anders in de boringen-tabel; alleen bestaande
+   boringen-kolommen worden geschreven (whitelist), zodat opslaan nooit naar
+   een niet-bestaande kolom gaat. */
+const ALIAS_TO_DB: Record<string, string> = {
+  startdatum: 'startdatum_engineering',
+  gereed: 'engineering_afgerond',
+  tek_pct: 'hdd_tek_pct',
+  opmerking_extra: 'opmerkingen',
+};
+const BORINGEN_COLS = new Set<string>([
+  'werkpakket_id', 'boring_nr', 'type_boring', 'locatie', 'lengte_m', 'diameter_mm', 'diepte_m',
+  'aannemer', 'startdatum', 'einddatum', 'opmerkingen', 'status', 'werkpakket_nr', 'klasse',
+  'apd_verantw', 'oplevering_toolgate', 'planning_apds', 'status_ontwerp', 'hdd_tek_pct',
+  'status_werkterrein', 'status_berekening', 'proefsleuf_nr', 'sondering_nr', 'bundel_configuratie',
+  'prioritering', 'vervallen', 'intake_compleet', 'startdatum_engineering', 'deadline_engineering',
+  'engineering_afgerond', 'stappen',
+]);
+function fromDb(row: Record<string, unknown>): LemmerBoring {
+  return {
+    ...row,
+    startdatum: row.startdatum_engineering as string | undefined,
+    gereed: row.engineering_afgerond as boolean | undefined,
+    tek_pct: row.hdd_tek_pct as number | undefined,
+    opmerking_extra: row.opmerkingen as string | undefined,
+  } as unknown as LemmerBoring;
+}
+function toDb(form: Partial<LemmerBoring>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(form)) {
+    const key = ALIAS_TO_DB[k] ?? k;
+    if (BORINGEN_COLS.has(key)) out[key] = v;
+  }
+  return out;
+}
+
+/* Data-hook: leest/schrijft alle projecten uit de gedeelde boringen-tabel. */
 function useLemmerData() {
   const [data, setData] = useState<LemmerBoring[]>([]);
   const [loading, setLoading] = useState(true);
@@ -989,10 +1055,10 @@ function useLemmerData() {
     setLoading(true);
     try {
       const supabase = createClient();
-      const { data: rows, error } = await supabase.from('lemmer').select('*').order('created_at', { ascending: true });
+      const { data: rows, error } = await supabase.from('boringen').select('*').order('created_at', { ascending: true });
       if (error) throw error;
-      setData((rows ?? []) as unknown as LemmerBoring[]);
-    } catch (err) { console.error('Fout bij laden lemmer:', err); }
+      setData((rows ?? []).map(r => fromDb(r as Record<string, unknown>)));
+    } catch (err) { console.error('Fout bij laden boringen:', err); }
     finally { setLoading(false); }
   }, []);
   const loadPersonen = useCallback(async () => {
@@ -1019,26 +1085,26 @@ function useLemmerData() {
   const save = useCallback(async (id: string | null, form: Partial<LemmerBoring>) => {
     const supabase = createClient();
     if (id) {
-      const { error } = await supabase.from('lemmer').update(form as never).eq('id', id);
+      const { error } = await supabase.from('boringen').update(toDb(form) as never).eq('id', id);
       if (error) throw new Error(error.message);
       setData(prev => prev.map(r => r.id === id ? { ...r, ...form } : r));
     } else {
-      const { data: ins, error } = await supabase.from('lemmer').insert(form as never).select();
+      const { data: ins, error } = await supabase.from('boringen').insert(toDb(form) as never).select();
       if (error) throw new Error(error.message);
-      if (ins) setData(prev => [...prev, ...(ins as unknown as LemmerBoring[])]);
+      if (ins) setData(prev => [...prev, ...ins.map(r => fromDb(r as Record<string, unknown>))]);
     }
   }, []);
   const remove = useCallback(async (id: string) => {
     const supabase = createClient();
-    const { error } = await supabase.from('lemmer').delete().eq('id', id);
+    const { error } = await supabase.from('boringen').delete().eq('id', id);
     if (error) throw new Error(error.message);
     setData(prev => prev.filter(r => r.id !== id));
   }, []);
   const refresh = useCallback(async () => {
     const supabase = createClient();
-    const { data: rows, error } = await supabase.from('lemmer').select('*').order('created_at', { ascending: true });
+    const { data: rows, error } = await supabase.from('boringen').select('*').order('created_at', { ascending: true });
     if (error) throw new Error(error.message);
-    setData((rows ?? []) as unknown as LemmerBoring[]);
+    setData((rows ?? []).map(r => fromDb(r as Record<string, unknown>)));
   }, []);
   return { data, loading, save, remove, reload: load, refresh, personen, addPersoon, removePersoon };
 }
