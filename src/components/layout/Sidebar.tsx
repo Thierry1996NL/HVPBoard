@@ -31,8 +31,13 @@ const NAV: NavItem[] = [
   },
   {
     section: 'Modules',
+    href: '/boringen',
+    label: 'Boringen (oud)',
+    icon: <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.4"/><path d="M1.5 6h13M6 6v7.5" stroke="currentColor" strokeWidth="1.4"/></svg>,
+  },
+  {
     href: '/lemmer',
-    label: 'Boringen',
+    label: 'Boringen (nieuw)',
     icon: <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M8 2v12M5 5l3-3 3 3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/><ellipse cx="8" cy="13" rx="4" ry="1.5" stroke="currentColor" strokeWidth="1.4"/></svg>,
   },
   {
