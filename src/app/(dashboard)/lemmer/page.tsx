@@ -248,7 +248,7 @@ type ColId =
   | 'aanlevering_compleet' | 'ter_controle_uitvoering' | 'retour_uitvoering' | 'schouw_uitgevoerd'
   | 'opmerkingen_uitvoering' | 'planning_apds' | 'ontwerp_pct' | 'tek_pct' | 'status_werkterrein'
   | 'status_berekening' | 'sondering_nr' | 'sondering_aangevraagd' | 'sondering_retour'
-  | 'bundel_configuratie' | 'raakvlak' | 'opmerking_extra' | 'case_nr' | 'gereed';
+  | 'bundel_configuratie' | 'raakvlak' | 'opmerking_extra' | 'case_nr' | 'gereed' | 'project';
 
 const DEFAULT_COL_ORDER: ColId[] = [
   'boring_nr', 'werkpakket_nr', 'locatie', 'lengte_m', 'type_boring', 'klasse', 'aannemer',
@@ -272,7 +272,7 @@ const HIDDEN_KEY = 'hvp_lemmer_hidden_v6';
 /* Koppeling fase-kolom → index in PROCES_FASEN */
 const FASE_COL: Record<string, number> = { fase0: 0, faseG: 1, fase1: 2, fase2: 3 };
 /* Berekende kolommen zonder eigen databaseveld — niet filterbaar via de header. */
-const NIET_FILTERBAAR: ColId[] = ['fase0', 'faseG', 'fase1', 'fase2', 'einddatum', 'eind_weken', 'actieve_stap', 'gereed'];
+const NIET_FILTERBAAR: ColId[] = [];
 
 /* Alle projecten in deze module (werkpakket_id komt overeen met boringen.werkpakket_id). */
 interface ProjectDef { wp: number; naam: string; fase: string; case: string; pl: string; }
@@ -359,7 +359,7 @@ export default function LemmerPage() {
   const toggleHidden = (id: ColId) => setHidden(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const allVisible = hidden.size === 0;
   const toggleAlleKolommen = () => setHidden(allVisible ? new Set(DEFAULT_HIDDEN) : new Set());
-  const visibleCols = columnOrder.filter(id => !hidden.has(id));
+  const visibleCols = (wp === 0 ? (['project', ...columnOrder.filter(id => !hidden.has(id))] as ColId[]) : columnOrder.filter(id => !hidden.has(id)));
 
   const onDragStart = (e: React.DragEvent, id: ColId) => { setDragCol(id); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', id); };
   const onDragOver  = (e: React.DragEvent, id: ColId) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; if (id !== dragOverCol) setDragOverCol(id); };
@@ -425,9 +425,27 @@ export default function LemmerPage() {
     }
     return geel ? 'geel' : 'groen';
   };
+  /* Tekstwaarde per kolom om op te filteren — werkt ook voor berekende kolommen. */
+  const colFilterValue = (d: LemmerBoring, id: ColId): string => {
+    if (id === 'project') return PROJECTEN.find(p => p.wp === d.werkpakket_id)?.naam ?? '';
+    if (id === 'gereed') return d.gereed ? 'ja' : 'nee';
+    if (FASE_COL[id] !== undefined) {
+      const f = PROCES_FASEN[FASE_COL[id]];
+      return `${f.stappen.filter(s => stapDone(getStap(d, s.id))).length}/${f.stappen.length}`;
+    }
+    if (id === 'einddatum' || id === 'eind_weken') {
+      const deadlines = ALLE_STAPPEN.map(s => getStap(d, s.id).deadline).filter(Boolean) as string[];
+      const e = deadlines.length ? deadlines.reduce((a, b) => (a > b ? a : b)) : einddatumVan(d.startdatum);
+      if (id === 'einddatum') return e ?? '';
+      if (!e) return '';
+      return String(Math.round((new Date(e).getTime() - Date.now()) / (1000 * 60 * 60 * 24 * 7)));
+    }
+    if (id === 'actieve_stap') { const a = activeStap(d); return a ? `${a.step.nr} ${a.step.titel}` : ''; }
+    return String(d[id as keyof LemmerBoring] ?? '');
+  };
 
   const stats = useMemo(() => {
-    const proj = data.filter(d => d.werkpakket_id === wp);
+    const proj = data.filter(d => wp === 0 || d.werkpakket_id === wp);
     const a = proj.filter(d => !d.vervallen);
     let groen = 0, geel = 0, rood = 0;
     for (const d of a) { const h = boringHealth(d); if (h === 'rood') rood++; else if (h === 'geel') geel++; else groen++; }
@@ -436,7 +454,7 @@ export default function LemmerPage() {
 
   const rows = useMemo(() => {
     let r = data.filter(d => {
-      if (d.werkpakket_id !== wp) return false;
+      if (wp !== 0 && d.werkpakket_id !== wp) return false;
       if (kpi === 'vervallen') { if (!d.vervallen) return false; }
       else { if (d.vervallen) return false; if (kpi !== 'actief' && boringHealth(d) !== kpi) return false; }
       if (search) {
@@ -449,9 +467,9 @@ export default function LemmerPage() {
       const av = a[sortCol], bv = b[sortCol];
       return String(av ?? '').localeCompare(String(bv ?? ''), 'nl', { numeric: true }) * sortDir;
     });
-    const fEntries = Object.entries(colFilters).filter(([id, v]) => (v ?? '').trim() && !NIET_FILTERBAAR.includes(id as ColId));
+    const fEntries = Object.entries(colFilters).filter(([, v]) => (v ?? '').trim());
     if (fEntries.length) r = r.filter(d => fEntries.every(([id, v]) =>
-      String(d[id as keyof LemmerBoring] ?? '').toLowerCase().includes((v as string).trim().toLowerCase())));
+      colFilterValue(d, id as ColId).toLowerCase().includes((v as string).trim().toLowerCase())));
     return r;
   }, [data, search, kpi, sortCol, sortDir, colFilters, wp]);
 
@@ -633,6 +651,11 @@ export default function LemmerPage() {
     raakvlak: textCol('Raakvlak', 'raakvlak', { sort: false, wide: true }),
     opmerking_extra: textCol('Opmerkingen', 'opmerking_extra', { sort: false, wide: true }),
     case_nr: textCol('Case nr.', 'case_nr'),
+    project: { label: 'Project', cell: d => (
+      <td style={{ whiteSpace: 'nowrap', color: 'var(--text-2)', fontWeight: 600 }}>
+        {PROJECTEN.find(p => p.wp === d.werkpakket_id)?.naam ?? '—'}
+      </td>
+    ) },
     gereed: { label: 'Gereed', cell: d => (
       <td style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
         <button className="btn" onClick={() => saveField(d.id, { gereed: !d.gereed })}
@@ -694,11 +717,18 @@ export default function LemmerPage() {
         .stat-card.stat-R .stat-num { color: var(--b-fg); }
       `}</style>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 10 }}>
-        <h1 style={{ fontSize: 20, fontWeight: 600, margin: 0 }}>{project.naam}</h1>
-        <span style={{ fontSize: 12, color: 'var(--text-4)' }}>{project.fase} · case {project.case} · {project.pl}</span>
+        <h1 style={{ fontSize: 20, fontWeight: 600, margin: 0 }}>{wp === 0 ? 'Alle projecten' : project.naam}</h1>
+        <span style={{ fontSize: 12, color: 'var(--text-4)' }}>
+          {wp === 0 ? `${PROJECTEN.length} projecten · ${stats.totaal} boringen` : `${project.fase} · case ${project.case} · ${project.pl}`}
+        </span>
       </div>
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 14 }}>
+        <button type="button" onClick={() => setWp(0)} className="btn"
+          style={{ fontSize: 12, padding: '5px 12px', fontWeight: wp === 0 ? 700 : 500,
+            ...(wp === 0 ? { background: 'var(--accent)', color: '#fff', borderColor: 'var(--accent)' } : {}) }}>
+          Alle projecten
+        </button>
         {PROJECTEN.map(p => (
           <button key={p.wp} type="button" onClick={() => setWp(p.wp)}
             className="btn"
@@ -755,7 +785,8 @@ export default function LemmerPage() {
             </>
           )}
         </div>
-        <button className="btn btn-primary" onClick={() => openEdit()}>+ Boring toevoegen</button>
+        <button className="btn btn-primary" onClick={() => openEdit()} disabled={wp === 0}
+          title={wp === 0 ? 'Kies eerst een project' : undefined}>+ Boring toevoegen</button>
       </div>
 
       <div className="table-wrap">
@@ -791,10 +822,8 @@ export default function LemmerPage() {
                   </th>
                   {visibleCols.map(id => (
                     <th key={id} style={{ padding: '2px 6px' }}>
-                      {NIET_FILTERBAAR.includes(id) ? null : (
-                        <input className="inline-edit" style={{ width: '100%', minWidth: 64, fontWeight: 400 }} placeholder="filter…"
-                          value={colFilters[id] ?? ''} onChange={e => setColFilters(f => ({ ...f, [id]: e.target.value }))} />
-                      )}
+                      <input className="inline-edit" style={{ width: '100%', minWidth: 64, fontWeight: 400 }} placeholder="filter…"
+                        value={colFilters[id] ?? ''} onChange={e => setColFilters(f => ({ ...f, [id]: e.target.value }))} />
                     </th>
                   ))}
                   <th></th>
@@ -808,7 +837,13 @@ export default function LemmerPage() {
                 const isOpen = expanded.has(d.id);
                 return (
                   <Fragment key={d.id}>
-                    <tr style={{ opacity: d.vervallen ? 0.45 : d.gereed ? 0.6 : 1, background: d.gereed ? 'var(--n-bg)' : undefined }}>
+                    <tr style={{
+                      opacity: d.vervallen ? 0.45 : d.gereed ? 0.6 : 1,
+                      background: d.gereed ? 'var(--n-bg)'
+                        : (!d.vervallen && boringHealth(d) === 'rood') ? 'var(--b-bg)'
+                        : (!d.vervallen && boringHealth(d) === 'geel') ? 'var(--r-bg)'
+                        : undefined,
+                    }}>
                       <td style={{ textAlign: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }}
                         title={isOpen ? 'Stappen inklappen' : 'Stappen uitklappen'}
                         onClick={() => toggleExpand(d.id)}>
@@ -858,8 +893,10 @@ export default function LemmerPage() {
                                         const wk = (sd.deadline && !sd.afgerond)
                                           ? Math.round((new Date(sd.deadline).getTime() - Date.now()) / (1000 * 60 * 60 * 24 * 7))
                                           : null;
+                                        const teLaat = wk !== null && wk < 0 && !stapDone(sd) && sd.status !== 'N.v.t.';
                                         return (
-                                          <tr className="lem-step-row" key={s.id}>
+                                          <tr className="lem-step-row" key={s.id}
+                                            style={teLaat ? { background: 'var(--b-bg)', boxShadow: 'inset 3px 0 0 var(--b-fg)' } : undefined}>
                                             <td style={{ minWidth: 320 }}>
                                               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                                 <span className="lem-step-num">{s.nr}</span>
