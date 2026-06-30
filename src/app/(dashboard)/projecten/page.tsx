@@ -10,51 +10,56 @@ import Modal from '@/components/ui/Modal';
 import { STATUS_VALUES, statusClass } from '@/lib/constants';
 import { getProjectNaam, getEngineer, getProjectStatus, getProgressPercent } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
+import { stappenGereed, eersteOpenDeadline, projectHealth, boringHealth, ALLE_STAPPEN, type BoringProces, type Health } from '@/lib/proces';
 import type { Werkpakket, CelData, StatusValue } from '@/types';
 
-interface BoringSummary {
+interface BoringRow extends BoringProces {
   werkpakket_id: number;
   status_ontwerp?: string;
-  hdd_tek_pct?: number;
-  planning_apds?: string;
-  vervallen?: boolean;
 }
 
-/* Bereken samenvatting per project op basis van boringen */
+export interface ProjectSummary {
+  totaal: number;
+  health: Health;
+  voortgangPct: number;        // % stappen gereed over alle actieve boringen
+  vrijgegeven: number;         // boringen met ontwerp goedgekeurd/vrijgegeven
+  eersteDeadline: string | null;
+  weekenRest: number | null;
+}
+
+/* Samenvatting per project op basis van de boringen + het stappen-proces. */
 function useBoringSummaries() {
-  const [boringen, setBoringen] = useState<BoringSummary[]>([]);
+  const [boringen, setBoringen] = useState<BoringRow[]>([]);
   useEffect(() => {
     createClient()
       .from('boringen')
-      .select('werkpakket_id, status_ontwerp, hdd_tek_pct, planning_apds, vervallen')
-      .then(({ data }) => setBoringen((data ?? []) as BoringSummary[]));
+      .select('werkpakket_id, status_ontwerp, stappen, engineering_afgerond, vervallen')
+      .then(({ data }) => setBoringen((data ?? []) as BoringRow[]));
   }, []);
 
   return useMemo(() => {
-    const map = new Map<number, {
-      totaal: number; vrijgegeven: number; gemTekPct: number;
-      eersteDeadline: string | null; weekenRest: number | null;
-    }>();
-    const byProject = new Map<number, BoringSummary[]>();
+    const map = new Map<number, ProjectSummary>();
+    const byProject = new Map<number, BoringRow[]>();
     for (const b of boringen) {
       if (!byProject.has(b.werkpakket_id)) byProject.set(b.werkpakket_id, []);
       byProject.get(b.werkpakket_id)!.push(b);
     }
+    const TOT = ALLE_STAPPEN.length;
     byProject.forEach((bors, pid) => {
       const active = bors.filter(b => !b.vervallen);
-      const vrijgegeven = active.filter(b => ['Vrijgegeven','Goedgekeurd'].includes(b.status_ontwerp ?? '')).length;
-      const tekPcts = active.map(b => b.hdd_tek_pct ?? 0);
-      const gemTek = tekPcts.length ? tekPcts.reduce((a, b) => a + b, 0) / tekPcts.length : 0;
-      const upcoming = active
-        .filter(b => b.planning_apds)
-        .map(b => ({ date: b.planning_apds!, ms: new Date(b.planning_apds!).getTime() }))
-        .sort((a, b) => a.ms - b.ms);
-      // Prioriteer nog niet-verlopen deadlines, anders meest recente verlopen
-      const nu = Date.now();
-      const future = upcoming.filter(d => d.ms >= nu);
-      const best = future.length ? future[0] : upcoming[upcoming.length - 1] ?? null;
-      const weekenRest = best ? Math.round((best.ms - nu) / (1000*60*60*24*7)) : null;
-      map.set(pid, { totaal: active.length, vrijgegeven, gemTekPct: gemTek, eersteDeadline: best?.date ?? null, weekenRest });
+      const vrijgegeven = active.filter(b => ['Vrijgegeven', 'Goedgekeurd'].includes(b.status_ontwerp ?? '')).length;
+      const gereedTot = active.reduce((sum, b) => sum + stappenGereed(b), 0);
+      const voortgangPct = active.length ? Math.round((gereedTot / (active.length * TOT)) * 100) : 0;
+      // Meest urgente openstaande stap-deadline over alle boringen
+      let eerste: string | null = null;
+      for (const b of active) {
+        const d = eersteOpenDeadline(b);
+        if (d && (eerste === null || d < eerste)) eerste = d;
+      }
+      const weekenRest = eerste
+        ? Math.round((new Date(eerste).getTime() - Date.now()) / (1000 * 60 * 60 * 24 * 7))
+        : null;
+      map.set(pid, { totaal: active.length, health: projectHealth(active), voortgangPct, vrijgegeven, eersteDeadline: eerste, weekenRest });
     });
     return map;
   }, [boringen]);
@@ -95,7 +100,7 @@ export default function ProjectenPage() {
   // Engineers list
   const engineers = useMemo(() => {
     const set = new Set<string>();
-    projects.forEach(p => { const e = getEngineer(p.cel_data); if (e) set.add(e); });
+    projects.forEach(p => { const e = p.cel_data['179'] || getEngineer(p.cel_data); if (e) set.add(e); });
     return Array.from(set).sort();
   }, [projects]);
 
@@ -109,7 +114,7 @@ export default function ProjectenPage() {
       if (!showArchief && isArchief) return false;
       if (showArchief && !isArchief) return false;
 
-      if (filterEngineer && getEngineer(cd) !== filterEngineer) return false;
+      if (filterEngineer && (cd['179'] || getEngineer(cd)) !== filterEngineer) return false;
       if (filterStatus && getProjectStatus(cd) !== filterStatus) return false;
 
       if (search) {
@@ -122,25 +127,25 @@ export default function ProjectenPage() {
     });
   }, [projects, search, filterEngineer, filterStatus, showArchief]);
 
-  // KPI counts
+  // KPI: stoplicht-rollup per project (consistent met Boringen-module)
   const kpi = useMemo(() => {
-    const counts = { total: rows.length, G: 0, L: 0, R: 0, B: 0 };
+    const counts = { total: rows.length, groen: 0, geel: 0, rood: 0 };
     rows.forEach(p => {
-      const s = getProjectStatus(p.cel_data);
-      if (s === 'Gereed') counts.G++;
-      else if (s === 'Loopt') counts.L++;
-      else if (s === 'Review') counts.R++;
-      else if (s === 'Geblokkeerd') counts.B++;
+      const bs = boringSummaries.get(p.row_idx);
+      const h = bs?.health ?? 'groen';
+      if (h === 'rood') counts.rood++;
+      else if (h === 'geel') counts.geel++;
+      else counts.groen++;
     });
     return counts;
-  }, [rows]);
+  }, [rows, boringSummaries]);
 
   // Vaste basiskolommen — geen fase-filtering meer
   const visibleCols = [
     { i: 0, n: 'Proj. nr int.' },
     { i: 2, n: 'Projectnaam' },
     { i: 5, n: 'WP nr' },
-    { i: 8, n: 'Engineer' },
+    { i: 179, n: 'Projectleider' },
   ];
 
   const isStatusCol = (_colIdx: number) => false;
@@ -205,20 +210,16 @@ export default function ProjectenPage() {
           <span className="stat-label">Projecten</span>
         </div>
         <div className="stat-card stat-G">
-          <span className="stat-num">{kpi.G}</span>
-          <span className="stat-label">Gereed</span>
-        </div>
-        <div className="stat-card stat-L">
-          <span className="stat-num">{kpi.L}</span>
-          <span className="stat-label">Loopt</span>
+          <span className="stat-num">{kpi.groen}</span>
+          <span className="stat-label">Op schema</span>
         </div>
         <div className="stat-card stat-R">
-          <span className="stat-num">{kpi.R}</span>
-          <span className="stat-label">Review</span>
+          <span className="stat-num">{kpi.geel}</span>
+          <span className="stat-label">Aandacht</span>
         </div>
         <div className="stat-card stat-B">
-          <span className="stat-num">{kpi.B}</span>
-          <span className="stat-label">Geblokkeerd</span>
+          <span className="stat-num">{kpi.rood}</span>
+          <span className="stat-label">Te laat</span>
         </div>
       </div>
 
@@ -248,7 +249,7 @@ export default function ProjectenPage() {
             value={filterEngineer}
             onChange={e => setFilterEngineer(e.target.value)}
           >
-            <option value="">Alle engineers</option>
+            <option value="">Alle projectleiders</option>
             {engineers.map(e => <option key={e} value={e}>{e}</option>)}
           </select>
 
@@ -290,7 +291,7 @@ export default function ProjectenPage() {
                 ))}
                 <th>Boringen</th>
                 <th>Ontwerp ✓</th>
-                <th>Gem. Tek %</th>
+                <th>Voortgang</th>
                 <th>Eerste deadline</th>
                 <th>Weken</th>
                 <th></th>
@@ -312,15 +313,15 @@ export default function ProjectenPage() {
                   const overallStatus = getProjectStatus(cd);
                   const bs = boringSummaries.get(p.row_idx);
 
-                  // Ontwerp % (Vrijgegeven + Goedgekeurd / totaal)
+                  // Ontwerp % (Vrijgegeven + Goedgekeurd / totaal) + voortgang in stappen
                   const ontwerpPct = bs && bs.totaal > 0 ? Math.round((bs.vrijgegeven / bs.totaal) * 100) : null;
-                  const gemTekPct  = bs && bs.totaal > 0 ? Math.round(bs.gemTekPct * 100) : null;
+                  const voortgangPct = bs && bs.totaal > 0 ? bs.voortgangPct : null;
                   const wk = bs?.weekenRest ?? null;
 
                   return (
                     <tr key={p.row_idx} style={{ cursor: 'pointer' }} onClick={() => router.push(`/project/${p.row_idx}`)}>
                       {visibleCols.map(col => {
-                        const val = cd[String(col.i)] ?? '';
+                        const val = col.i === 179 ? (cd['179'] || cd['8'] || '') : (cd[String(col.i)] ?? '');
                         const isStatus = isStatusCol(col.i);
                         return (
                           <td key={col.i}
@@ -354,15 +355,15 @@ export default function ProjectenPage() {
                         ) : <span style={{ color: 'var(--text-4)', fontSize: 11 }}>—</span>}
                       </td>
 
-                      {/* Gem. Tek % */}
+                      {/* Voortgang in stappen */}
                       <td>
-                        {gemTekPct !== null ? (
+                        {voortgangPct !== null ? (
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <div style={{ width: 40, height: 3, borderRadius: 2, background: '#E5E7EB', overflow: 'hidden' }}>
-                              <div style={{ width: `${gemTekPct}%`, height: '100%', borderRadius: 2,
-                                background: gemTekPct === 100 ? '#1A7F3C' : gemTekPct >= 75 ? '#8BC34A' : '#F5A623' }} />
+                            <div style={{ width: 48, height: 4, borderRadius: 2, background: '#E5E7EB', overflow: 'hidden' }}>
+                              <div style={{ width: `${voortgangPct}%`, height: '100%', borderRadius: 2,
+                                background: voortgangPct === 100 ? '#1A7F3C' : voortgangPct >= 50 ? '#8BC34A' : '#3D6B9E' }} />
                             </div>
-                            <span style={{ fontSize: 10, color: 'var(--text-3)' }}>{gemTekPct}%</span>
+                            <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-2)', minWidth: 28 }}>{voortgangPct}%</span>
                           </div>
                         ) : <span style={{ color: 'var(--text-4)', fontSize: 11 }}>—</span>}
                       </td>
@@ -378,9 +379,9 @@ export default function ProjectenPage() {
                       <td>
                         {wk !== null ? (
                           <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 20, whiteSpace: 'nowrap',
-                            background: wk < 0 ? '#FEE2E2' : wk <= 4 ? '#FEF3C7' : '#D1FAE5',
-                            color: wk < 0 ? '#991B1B' : wk <= 4 ? '#92400E' : '#065F46',
-                            border: `0.5px solid ${wk < 0 ? '#FECACA' : wk <= 4 ? '#FDE68A' : '#A7F3D0'}` }}>
+                            background: wk < 0 ? '#FEE2E2' : wk <= 2 ? '#FEF3C7' : '#D1FAE5',
+                            color: wk < 0 ? '#991B1B' : wk <= 2 ? '#92400E' : '#065F46',
+                            border: `0.5px solid ${wk < 0 ? '#FECACA' : wk <= 2 ? '#FDE68A' : '#A7F3D0'}` }}>
                             {wk < 0 ? `${Math.abs(wk)}w te laat` : `${wk}w`}
                           </span>
                         ) : <span style={{ color: 'var(--text-4)', fontSize: 11 }}>—</span>}
