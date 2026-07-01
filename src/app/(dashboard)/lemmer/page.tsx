@@ -806,11 +806,6 @@ export default function LemmerPage() {
         <button className="btn" onClick={handleOpslaan} disabled={opslaan} style={{ fontSize: 11 }} title="Synchroniseren met de database (wijzigingen worden al automatisch opgeslagen)">
           {opslaan ? '… Opslaan' : '💾 Opslaan'}
         </button>
-        <button className="btn" onClick={() => setIntakeMode(m => !m)}
-          style={{ fontSize: 11, ...(intakeMode ? { borderColor: 'var(--accent)', color: 'var(--accent)', fontWeight: 700 } : {}) }}
-          title="Boringen die nog beoordeeld en doorgezet moeten worden">
-          📥 {intakeMode ? 'Terug naar project' : `Intake${intakeCount ? ` (${intakeCount})` : ''}`}
-        </button>
         <div style={{ flex: 1 }} />
         <div style={{ position: 'relative' }}>
           <button className="btn" onClick={() => setColPickerOpen(o => !o)} style={{ fontSize: 11 }} title="Kies welke kolommen zichtbaar zijn">

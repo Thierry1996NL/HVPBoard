@@ -41,6 +41,11 @@ const NAV: NavItem[] = [
     icon: <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M8 2v12M5 5l3-3 3 3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/><ellipse cx="8" cy="13" rx="4" ry="1.5" stroke="currentColor" strokeWidth="1.4"/></svg>,
   },
   {
+    href: '/intake',
+    label: 'Intake',
+    icon: <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M8 1.5v7M5 6l3 2.5L11 6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/><path d="M2.5 10.5v2.5a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1v-2.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg>,
+  },
+  {
     href: '/procesomschrijving',
     label: 'Procesomschrijving',
     icon: <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><rect x="2.5" y="1.5" width="11" height="13" rx="1.5" stroke="currentColor" strokeWidth="1.4"/><path d="M5 5h6M5 8h6M5 11h4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg>,
