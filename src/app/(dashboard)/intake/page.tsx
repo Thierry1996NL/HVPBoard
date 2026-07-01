@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useToast } from '@/components/ui/ToastProvider';
+import Modal from '@/components/ui/Modal';
 import { createClient } from '@/lib/supabase/client';
 import { bepaalOpdrachtgever, OPDRACHTGEVERS } from '@/lib/proces';
 
@@ -35,6 +36,11 @@ export default function IntakePage() {
   const [keuze, setKeuze] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [bezig, setBezig] = useState(false);
+  const [formOpen, setFormOpen] = useState(false);
+  const [form, setForm] = useState<Partial<Boring>>({});
+
+  const KLASSEN = ['9T', '17T', '27T', '50T'];
+  const TYPES = ['Walk-over', 'Gyro'];
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -53,6 +59,33 @@ export default function IntakePage() {
   );
 
   const gekozen = (b: Boring) => keuze[b.id] ?? bepaalOpdrachtgever(b.klasse, b.lengte_m) ?? '';
+
+  const openNieuw = () => {
+    setForm({ werkpakket_id: wp === 0 ? 1 : wp, klasse: '9T', type_boring: 'Walk-over' });
+    setFormOpen(true);
+  };
+
+  const aanmaken = async () => {
+    if (!form.werkpakket_id) { toast('Kies een project', 'error'); return; }
+    if (!form.boring_nr) { toast('Vul een boornummer in', 'error'); return; }
+    setBezig(true);
+    const payload = {
+      werkpakket_id: form.werkpakket_id,
+      boring_nr: form.boring_nr,
+      locatie: form.locatie ?? null,
+      klasse: form.klasse ?? null,
+      lengte_m: form.lengte_m ?? null,
+      type_boring: form.type_boring ?? null,
+      intake_compleet: false,
+      vervallen: false,
+    };
+    const { data: ins, error } = await createClient().from('boringen').insert(payload as never).select();
+    setBezig(false);
+    if (error) { toast(error.message, 'error'); return; }
+    if (ins) setData(prev => [...prev, ...(ins as unknown as Boring[])]);
+    setFormOpen(false);
+    toast('Boring toegevoegd aan de intake', 'success');
+  };
 
   const doorzetten = async (b: Boring) => {
     const g = gekozen(b);
@@ -95,15 +128,26 @@ export default function IntakePage() {
         ))}
       </div>
 
-      <div style={{ marginBottom: 12, fontSize: 12, color: 'var(--text-3)' }}>
-        De formule stelt op basis van klasse (tonnage) + lengte een opdrachtgever voor. Controleer, pas eventueel aan, en zet door — de boring komt dan in het project (Boringen).
+      <div style={{ marginBottom: 14, fontSize: 12.5, color: 'var(--text-2)', background: 'var(--surface-2, #f5f7fa)', border: '1px solid var(--border)', borderRadius: 10, padding: '12px 14px', maxWidth: 720 }}>
+        <div style={{ fontWeight: 700, marginBottom: 4, color: 'var(--text)' }}>Hoe de formule de opdrachtgever kiest</div>
+        <div style={{ lineHeight: 1.6 }}>De opdrachtgever wordt bepaald uit <strong>klasse (tonnage)</strong> en <strong>lengte</strong> van de boring:</div>
+        <ul style={{ margin: '6px 0 0', paddingLeft: 18, lineHeight: 1.7 }}>
+          <li><strong>17T, 27T, 50T</strong> en zwaarder → <strong>Heijmans</strong> (alleen zij hebben deze boorstellingen)</li>
+          <li><strong>9T</strong> tot en met <strong>150 m</strong> → <strong>Pol</strong> (korte boringen)</li>
+          <li><strong>9T</strong> langer dan <strong>150 m</strong> → <strong>Voskuilen</strong> (kan tot 180 m)</li>
+          <li>Onbekende of lege klasse → <strong>handmatig</strong> kiezen</li>
+        </ul>
+        <div style={{ marginTop: 8, color: 'var(--text-4)', fontSize: 11.5 }}>Het voorstel is een suggestie — je kunt het per boring aanpassen voordat je doorzet.</div>
       </div>
 
-      {pending.length > 0 && (
-        <button className="btn btn-primary" onClick={doorzetAlle} disabled={bezig} style={{ fontSize: 12, marginBottom: 12 }}>
-          {bezig ? 'Bezig…' : `Alles doorzetten (${pending.length})`}
-        </button>
-      )}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+        <button className="btn btn-primary" onClick={openNieuw} style={{ fontSize: 12 }}>+ Nieuwe boring</button>
+        {pending.length > 0 && (
+          <button className="btn" onClick={doorzetAlle} disabled={bezig} style={{ fontSize: 12 }}>
+            {bezig ? 'Bezig…' : `Alles doorzetten (${pending.length})`}
+          </button>
+        )}
+      </div>
 
       <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--r-md, 10px)', overflow: 'hidden' }}>
         <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 13 }}>
@@ -146,8 +190,52 @@ export default function IntakePage() {
           </tbody>
         </table>
       </div>
+
+      <Modal open={formOpen} onClose={() => setFormOpen(false)} title="Nieuwe boring — intake" maxWidth={460}
+        footer={
+          <>
+            <button className="btn" onClick={() => setFormOpen(false)}>Annuleren</button>
+            <button className="btn btn-primary" onClick={aanmaken} disabled={bezig}>{bezig ? 'Bezig…' : 'Aanmaken'}</button>
+          </>
+        }>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <label style={veldLabel}>Project
+            <select className="field-input" value={form.werkpakket_id ?? ''} onChange={e => setForm(f => ({ ...f, werkpakket_id: Number(e.target.value) }))}>
+              {PROJECTEN.map(p => <option key={p.wp} value={p.wp}>{p.naam}</option>)}
+            </select>
+          </label>
+          <label style={veldLabel}>Boornummer
+            <input className="field-input" placeholder="bijv. HDD-001" value={form.boring_nr ?? ''} onChange={e => setForm(f => ({ ...f, boring_nr: e.target.value }))} />
+          </label>
+          <label style={veldLabel}>Locatie
+            <input className="field-input" value={form.locatie ?? ''} onChange={e => setForm(f => ({ ...f, locatie: e.target.value }))} />
+          </label>
+          <div style={{ display: 'flex', gap: 12 }}>
+            <label style={{ ...veldLabel, flex: 1 }}>Klasse
+              <select className="field-input" value={form.klasse ?? ''} onChange={e => setForm(f => ({ ...f, klasse: e.target.value }))}>
+                {KLASSEN.map(k => <option key={k} value={k}>{k}</option>)}
+              </select>
+            </label>
+            <label style={{ ...veldLabel, flex: 1 }}>Lengte (m)
+              <input className="field-input" type="number" value={form.lengte_m ?? ''} onChange={e => setForm(f => ({ ...f, lengte_m: e.target.value === '' ? undefined : Number(e.target.value) }))} />
+            </label>
+          </div>
+          <label style={veldLabel}>Type
+            <select className="field-input" value={form.type_boring ?? ''} onChange={e => setForm(f => ({ ...f, type_boring: e.target.value }))}>
+              {TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </label>
+          <div style={{ fontSize: 12, color: 'var(--text-2)', background: 'var(--surface-2, #f5f7fa)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 12px' }}>
+            Voorstel opdrachtgever (formule):{' '}
+            <strong style={{ color: bepaalOpdrachtgever(form.klasse, form.lengte_m ?? null) ? 'var(--accent)' : 'var(--text-4)' }}>
+              {bepaalOpdrachtgever(form.klasse, form.lengte_m ?? null) ?? 'handmatig te kiezen'}
+            </strong>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
 
 const cel: React.CSSProperties = { padding: '7px 12px', borderBottom: '0.5px solid var(--border)', color: 'var(--text-2)', whiteSpace: 'nowrap' };
+const veldLabel: React.CSSProperties = { display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, fontWeight: 600, color: 'var(--text-2)' };

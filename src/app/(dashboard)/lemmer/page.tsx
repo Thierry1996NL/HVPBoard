@@ -829,8 +829,6 @@ export default function LemmerPage() {
             </>
           )}
         </div>
-        <button className="btn btn-primary" onClick={() => openEdit()} disabled={wp === 0}
-          title={wp === 0 ? 'Kies eerst een project' : undefined}>+ Boring toevoegen</button>
       </div>
 
       <div className="table-wrap">
