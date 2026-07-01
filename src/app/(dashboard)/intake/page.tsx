@@ -42,7 +42,7 @@ export default function IntakePage() {
       .from('boringen')
       .select('id, werkpakket_id, boring_nr, locatie, klasse, lengte_m, type_boring, aannemer, vervallen, intake_compleet')
       .order('boring_nr', { ascending: true });
-    setData((rows ?? []) as Boring[]);
+    setData((rows ?? []) as unknown as Boring[]);
     setLoading(false);
   }, []);
   useEffect(() => { load(); }, [load]);
@@ -57,7 +57,7 @@ export default function IntakePage() {
   const doorzetten = async (b: Boring) => {
     const g = gekozen(b);
     if (!g) { toast('Kies eerst een opdrachtgever', 'error'); return; }
-    const { error } = await createClient().from('boringen').update({ aannemer: g, intake_compleet: true }).eq('id', b.id);
+    const { error } = await createClient().from('boringen').update({ aannemer: g, intake_compleet: true } as never).eq('id', b.id);
     if (error) { toast(error.message, 'error'); return; }
     setData(prev => prev.map(x => (x.id === b.id ? { ...x, aannemer: g, intake_compleet: true } : x)));
     toast(`✓ ${b.boring_nr ?? 'Boring'} doorgezet naar ${g}`, 'success');
@@ -69,7 +69,7 @@ export default function IntakePage() {
     setBezig(true);
     let ok = 0;
     for (const { b, g } of todo) {
-      const { error } = await createClient().from('boringen').update({ aannemer: g, intake_compleet: true }).eq('id', b.id);
+      const { error } = await createClient().from('boringen').update({ aannemer: g, intake_compleet: true } as never).eq('id', b.id);
       if (!error) { ok++; setData(prev => prev.map(x => (x.id === b.id ? { ...x, aannemer: g, intake_compleet: true } : x))); }
     }
     setBezig(false);
