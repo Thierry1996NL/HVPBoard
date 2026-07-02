@@ -205,7 +205,7 @@ export default function ProcesPage() {
     borderColor: actief ? 'var(--accent)' : 'var(--border)',
   });
   return (
-    <div style={{ padding: '1.5rem', fontFamily: 'var(--font)', color: 'var(--text)' }}>
+    <div className="page-content">
       <h1 style={{ fontSize: 20, fontWeight: 600, margin: '0 0 14px' }}>Procesomschrijving</h1>
       <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
         <button type="button" style={tabBtn(tab === 'hvp')} onClick={() => setTab('hvp')}>Proces HVP</button>
