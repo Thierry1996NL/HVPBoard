@@ -1,217 +1,641 @@
 'use client';
 
-import React, { useState } from 'react';
+import { useState, useMemo } from 'react';
+import { useToast } from '@/components/ui/ToastProvider';
+import { useModuleData } from '@/hooks/useModuleData';
+import Modal from '@/components/ui/Modal';
 
-/* Inhoud uit "Procesbeschrijving HDD-engineering" (v1.0). Statische referentiepagina. */
-const DATA = {"secties": [{"h": "1 · Doel", "p": ["Dit document stelt het definitieve HDD-engineeringproces vast tussen HVP (tracé-engineering) en de boorpartners (DTE, Voskuilen en Pol), inclusief de doorlooptijden per processtap. Per stap zijn de definitie, verantwoordelijke, input, output en doorlooptijd vastgelegd, zodat helder is welke activiteit is uitgevoerd, waar het ligt en wie verantwoordelijk is — en partijen elkaar hierop kunnen aanspreken.", "Het proces is voor alle drie de boorpartners gelijk. Voor DTE wordt het hiermee expliciet geformaliseerd. Voor Voskuilen en Pol loopt de samenwerking al goed; voor hen bevestigt en herijkt dit stuk de bestaande afspraken. Het belangrijkste verschil per partij is de uitvoeringsafstemming (zie Rolverdeling)."]}, {"h": "2 · Ontwerpprincipe — één duidelijke gate", "p": ["Het kantelpunt in het proces is het overdrachtsmoment tussen tracé-engineer (HVP) en boor-engineer (boorpartner). Vóór die gate is HVP eigenaar (tracé, voorgestelde boorlijn en afwijkruimte); ná de gate is de boorpartner eigenaar (HDD-haalbaarheid, boorengineering t/m oplevering).", "De HDD-haalbaarheid (maakbaarheid) ligt bewust bij de boorpartner als boorspecialist; deze optimaliseert de boorlijn bínnen de door HVP aangegeven afwijkruimte. De gate gaat alleen ‘open’ als de complete aanleverset er is. Daarmee is ‘documenten compleet aangeleverd’ een harde, dateerbare mijlpaal in plaats van een grijs gebied."]}, {"h": "3 · Het overdrachtsmoment (gate)", "p": ["Een korte, vaste sessie (± 0,5 dag) tussen tracé-engineer en boor-engineer waarin tracé en boorlijn worden besproken, inclusief aandachtspunten techniek en omgeving, de afwijkruimte van de boorlijn en de status van het overleg met perceeleigenaren. De gate is pas ‘gehaald’ als de aanleverset compleet is en het overdrachtsverslag is afgetekend."]}], "doorloop": ["Zonder aanvullende sonderingen: indicatief ± 8–10 weken van vrijgave tracé tot definitieve oplevering, mits stappen 3/5/6 deels parallel lopen en reviews (7/8) gebundeld worden.", "Mét aanvullende sonderingen: + 3–4 weken — veruit de grootste en meest onzekere doorlooptijd (extern veldwerk). Behandel ‘sonderingen nodig?’ als kritiek-pad-beslissing: zo vroeg mogelijk in Fase 1, niet pas bij de D-GEO.", "Reviews/akkoorden door de uitvoeringspartij (7 en 11) zijn niet-beheersbare wachttijden — bij DTE via Heijmans, bij Voskuilen en Pol via eigen uitvoering. Maak hierover per partij een service-afspraak (bv. toets binnen 10 werkdagen).", "Parallelliseren: inrichtingstekening (6) naast boortekening (3); schouw (8) inplannen tijdens de concept-toets (7)."], "vervolg": ["DTE (nieuw): aanleverset en gate-definitie vaststellen; overdrachtsverslag als vast sjabloon (1 A4-checklist); dashboard-kolommen invoeren.", "Voskuilen en Pol (herijken): bestaande werkwijze naast dit proces leggen, bevestigen wat al goed loopt en alleen waar nodig bijstellen.", "Uitvoeringsafstemming per partij borgen: DTE via Heijmans (Lizanne); Voskuilen en Pol via hun eigen uitvoering.", "Doorlooptijden kalibreren met de boorpartners en omzetten in concrete service-afspraken.", "Eerste DTE-boringen langs dit proces draaien als pilot; na 2–3 boringen evalueren en bijstellen."], "stappen": [{"fase": "FASE 0 — Voorontwerp / tracé-engineering (HVP)", "items": [{"nr": "1", "titel": "Check tracé & bepalen boorlijn", "def": "Verifiëren van het tracé op maakbaarheid, knelpunten en kruisingen; vaststellen waar een gestuurde boring nodig is, de voorgestelde boorlijn (intrede/uittrede) en de afwijkruimte t.o.v. die boorlijn (techniek + perceelgrenzen). Afstemming met perceeleigenaren.", "input": "Input: Vastgesteld tracé, KLIC/omgevingsdata", "verantw": "Tracé-engineer (HVP)", "output": "Geverifieerd tracé + voorgestelde boorlijn + afwijkruimte + knelpuntenlijst + status perceeleigenaren", "tijd": "Bew. 1–2 d / Doorloop 3–5 wd"}]}, {"fase": "GATE — Overdrachtsmoment tracé-engineering → boor-engineering", "items": [{"nr": "G", "titel": "Overdracht tracé → boring", "def": "Formele overdracht tussen tracé-engineer (HVP) en boor-engineer (boorpartner). Bespreken: tracé en boorlijn, aandachtspunten techniek én omgeving, afwijkruimte van de boorlijn en status overleg perceeleigenaren. Dossier moet 100% compleet zijn (zie aanleverset) — dit is de dashboard-mijlpaal ‘documenten compleet aangeleverd’.", "input": "Input: Complete aanleverset (Tracé+boorlijn DWG/PDF, kadaster, QuickScan, bestaande sonderingen DWG)", "verantw": "Tracé-engineer (HVP) → Boor-engineer (boorpartner)", "output": "Getekend overdrachtsverslag/-checklist + datum ‘compleet aangeleverd’", "tijd": "Sessie 0,5 d"}]}, {"fase": "FASE 1 — Definitief ontwerp / boor-engineering (boorpartner)", "items": [{"nr": "2", "titel": "Haalbaarheidsstudie HDD", "def": "Beoordelen van de maakbaarheid van de boring (bodemopbouw, trekkracht, boogstralen, in-/uittrede) en de boorlijn optimaliseren bínnen de door HVP aangegeven afwijkruimte. Go/no-go op de boring. Bij no-go: loop-back naar de tracé-engineer (HVP).", "input": "Input: Overdrachtsdossier (tracé, voorgestelde boorlijn, afwijkruimte, QuickScan, sonderingen)", "verantw": "Boor-engineer (boorpartner)", "output": "HDD-haalbaarheidsoordeel + geoptimaliseerde boorlijn (binnen afwijkruimte) + go/no-go", "tijd": "Bew. 1–2 d / Doorloop 3–5 wd"}, {"nr": "3", "titel": "Concept boortekening", "def": "Uitwerken van de boring: intrede-/uittredepunt, boogstralen, diepteverloop, dekking en kruisingen.", "input": "Input: Haalbaarheidsoordeel + geoptimaliseerde boorlijn", "verantw": "Boor-engineer (boorpartner)", "output": "Concept boortekening (DWG + PDF)", "tijd": "Bew. 2–3 d / Doorloop 5 wd"}, {"nr": "4", "titel": "Beslismoment sonderingen", "def": "Bepalen of aanvullend grondonderzoek nodig is. Zo ja: aanvragen via de projectleider HVP (veldwerk + rapportage = extern).", "input": "Input: QuickScan, bestaande sonderingen, concept boortekening", "verantw": "Boor-engineer (boorpartner) / Projectleider HVP", "output": "Besluit J/N; bij ja: sonderingsopdracht → sonderingsrapport + DWG", "tijd": "Besluit 0,5 d / bij ja doorloop 3–4 wk (extern)"}, {"nr": "5", "titel": "Concept D-GEO-berekening", "def": "Geotechnische berekening van de boring (sterkte/maakbaarheid: trekkracht, spoeldruk, opbarstrisico).", "input": "Input: Concept boortekening + sonderingsgegevens", "verantw": "Boor-engineer (boorpartner)", "output": "Concept D-GEO-berekening (onderbouwing maakbaarheid)", "tijd": "Bew. 1–2 d / Doorloop 5 wd (na sonderingen)"}, {"nr": "6", "titel": "Voorlopige inrichtingstekening werkterrein", "def": "Inrichting van in-/uittredelocatie: opstelruimte, boorstelling, rijbaan, ruimtebeslag binnen perceelgrenzen.", "input": "Input: Boorlijn, kadaster, afwijkruimte", "verantw": "Boor-engineer (boorpartner)", "output": "Voorlopige inrichtingstekening werkterreinen", "tijd": "Bew. 1 d / Doorloop 3 wd (parallel aan 3–5)"}, {"nr": "7", "titel": "Toets concept boring", "def": "Inhoudelijke toets van de conceptboring door de uitvoeringspartij; commentaar of conceptakkoord. Partijspecifiek: DTE via Heijmans Uitvoering (Lizanne van Hal), Voskuilen en Pol via eigen uitvoering.", "input": "Input: Conceptpakket (boortekening, D-GEO, inrichting)", "verantw": "Uitvoeringspartij (partijspecifiek)", "output": "Toetsverslag / commentaarlijst (conceptakkoord)", "tijd": "Doorloop 5–10 wd (review)"}, {"nr": "8", "titel": "Schouw", "def": "Veldschouw op de boorlocatie om concept te toetsen aan de werkelijke situatie.", "input": "Input: Conceptboring + locatie", "verantw": "Schouwteam (partijspecifiek)", "output": "Schouwverslag met veldbevindingen/aandachtspunten", "tijd": "Doorloop 5–10 wd (plannen+uitvoeren; parallel aan 7)"}]}, {"fase": "FASE 2 — Definitief maken & oplevering", "items": [{"nr": "9", "titel": "Tekeningen aanpassen", "def": "Verwerken van toetscommentaar (7) en schouwbevindingen (8) in de tekeningen.", "input": "Input: Toetsverslag + schouwverslag", "verantw": "Boor-engineer (boorpartner)", "output": "Bijgewerkte boor- en inrichtingstekeningen", "tijd": "Bew. 1–2 d / Doorloop 3 wd"}, {"nr": "10", "titel": "Engineering aanvullen & definitief maken", "def": "Engineering compleet en consistent maken; definitief dossier samenstellen.", "input": "Input: Bijgewerkte tekeningen + D-GEO", "verantw": "Boor-engineer (boorpartner)", "output": "Definitief boringdossier (def. boortekening, def. D-GEO, inrichting, onderbouwing)", "tijd": "Bew. 2–3 d / Doorloop 5 wd"}, {"nr": "11", "titel": "Akkoord definitieve boring", "def": "Definitieve toets en vrijgave door de uitvoeringspartij: boring is uitvoeringsgereed. Partijspecifiek: DTE via Heijmans Uitvoering (Lizanne van Hal), Voskuilen en Pol via eigen uitvoering.", "input": "Input: Definitief boringdossier", "verantw": "Uitvoeringspartij (partijspecifiek)", "output": "Akkoord / vrijgave definitieve boring", "tijd": "Doorloop 5–10 wd (review)"}, {"nr": "12", "titel": "Definitieve oplevering", "def": "Opleveren en vastleggen van het complete, vrijgegeven boringdossier.", "input": "Input: Vrijgegeven dossier", "verantw": "Boor-engineer (boorpartner)", "output": "Opgeleverd dossier in Relatics/DMS — status ‘gereed voor uitvoering’", "tijd": "1 d"}]}], "rollen": [["Rol / organisatie", "Verantwoordelijk voor", "Persoon"], ["Tracé-engineer — HVP", "Tracéontwerp en voorgestelde boorlijn, afwegen techniek/omgeving, bepalen afwijkruimte boorlijn, afstemming perceeleigenaren. Eigenaar tot en met het overdrachtsmoment.", "HVP tracé-engineering"], ["Boor-engineer — boorpartner (DTE / Voskuilen / Pol)", "HDD-haalbaarheid (maakbaarheid) en boorengineering: boortekening, D-GEO-berekening, inrichtingstekening werkterrein. Eigenaar van het DO-traject ná de overdracht. Ontvanger van het overdrachtsdossier.", "Eigen coördinator p.p. (DTE: Henk)"], ["Toets / akkoord uitvoering — partijspecifiek", "Toetst concept- en definitieve boring en geeft akkoord (vrijgave voor uitvoering). Per boorpartner een andere uitvoeringspartij.", "DTE: Lizanne van Hal (Heijmans); Voskuilen/Pol: eigen uitvoering"], ["Schouw — veld", "Voert veldschouw uit op de boorlocatie, levert schouwbevindingen.", "Eigen schouwteam p.p. (DTE: Wilco & Henk)"], ["Sonderingen — coördinatie", "Aanvraag en coördinatie aanvullend grondonderzoek (veldwerk + rapportage).", "Projectleider HVP"], ["Proceseigenaar / regie", "Bewaakt proces, dashboard, afspraken en doorlooptijden; spreekt partijen aan.", "Patrick (HVP) / Thierry"]], "partners": [["Boorpartner", "Coördinator", "Uitvoeringsafstemming (toets & akkoord) via", "Status afspraken"], ["DTE", "Henk", "Heijmans Uitvoering — Lizanne van Hal", "Nieuw: proces & dashboard worden nu geformaliseerd"], ["Voskuilen", "Eigen coördinator", "Eigen uitvoering Voskuilen", "Loopt al goed — herijken/bevestigen van bestaande afspraken"], ["Pol", "Eigen coördinator", "Eigen uitvoering Pol", "Loopt al goed — herijken/bevestigen van bestaande afspraken"]], "aanleverset": [["Document / item", "Formaat", "Toelichting"], ["Tracé + boorlijn", "DWG én PDF", "Definitieve tracélijn en voorgestelde boorlijn (intrede/uittrede, lengte, globaal verloop)."], ["Kadasteroverzicht percelen", "PDF", "Percelen langs de boring met eigenaarsgegevens; basis voor inrichting en afwijkruimte."], ["Grondonderzoek (QuickScan)", "PDF / data", "Bodemopbouw op hoofdlijnen; bepaalt of aanvullende sonderingen nodig zijn."], ["Bestaande sonderingsgegevens", "DWG", "Reeds beschikbare sonderingen op de juiste coördinaten ingemeten."], ["Afwijkruimte boorlijn", "Notitie / op tekening", "Hoeveel ruimte er is om van de boorlijn af te wijken (techniek + perceelgrenzen)."], ["Status perceeleigenaren", "Notitie", "Of/wanneer overleg met eigenaren heeft plaatsgevonden en eventuele beperkingen."]], "dashkol": [["Kolom", "Inhoud / definitie", "Voorbeeld"], ["Boring-ID / locatie", "Unieke aanduiding van de boring + locatie/deelgebied.", "B-014 / Spannenburg"], ["Boorpartner", "Welke partij de boring uitvoert (DTE / Voskuilen / Pol).", "DTE"], ["Huidige processtap", "De stap waar de boring nu in staat (1–12 / Gate).", "5 — Concept D-GEO"], ["Status stap", "Stoplichtstatus van de huidige stap (zie statusdefinities).", "Loopt / Geblokkeerd"], ["Verantwoordelijke", "Persoon/rol die nú aan zet is — ‘wie’.", "Boor-engineer (boorpartner)"], ["Documenten compleet aangeleverd", "Datum waarop het overdrachtsdossier 100% compleet is (de gate).", "12-06-2026"], ["Tekenvoortgang %", "Voortgang binnen de teken-stappen (behouden, maar alleen binnen stap 3/9/10).", "60%"], ["Sonderingen nodig?", "J/N + status; markeert het kritieke pad.", "Ja — in uitvoering"], ["Gepland / werkelijk", "Geplande einddatum van de stap vs. werkelijke datum.", "20-06 / —"], ["Normdoorlooptijd stap", "Afgesproken normdoorloop voor de huidige stap (uit §6).", "5 wd"], ["Doorlooptijd / slip", "Werkelijke doorloop van de stap en afwijking t.o.v. de norm (+ = over norm).", "7 wd (+2 wd)"], ["Toets-/akkoordstatus", "Status toets concept (7) en akkoord definitief (11).", "Concept akkoord"], ["Knelpunten / opmerking", "Korte notitie bij afwijking of blokkade — ‘waarom’.", "Wacht op sondering"]], "statussen": [["Status", "Betekenis"], ["Open", "Stap nog niet gestart; wacht op voorgaande stap."], ["Loopt", "Stap in bewerking door de verantwoordelijke."], ["Gereed", "Stap afgerond én output geleverd/vastgelegd."], ["Geblokkeerd", "Wacht op externe input of akkoord (bv. sonderingen, toets uitvoeringspartij) — staat op het kritieke pad."]], "kpis": [["KPI", "Meetwijze", "Norm / streefwaarde"], ["Doorlooptijd per processtap", "Werkelijke kalenderdoorloop per stap, afgezet tegen de normtijd uit §6.", "≥ 90% binnen norm"], ["On-time per stap", "Aandeel afgeronde stappen dat binnen de normdoorlooptijd is afgerond.", "≥ 90%"], ["Doorlooptijd tot gate", "Tijd van start tracé tot ‘documenten compleet’ (gate-datum).", "≤ 5 wd"], ["Toets-/akkoorddoorloop", "Tijd tussen indienen en toets (stap 7) resp. akkoord (stap 11) bij de uitvoeringspartij.", "≤ 10 wd (service-afspraak)"], ["Totale doorlooptijd per boring", "Van gate tot definitieve oplevering.", "≤ 10 wkn (zonder sondering)"], ["Slip per boring", "Som van (werkelijk − norm) over alle stappen van de boring.", "≤ 0 (binnen norm)"], ["Sondering-impact", "% boringen met aanvullende sondering + gemiddelde extra doorlooptijd.", "monitoren; trend ↓"], ["Blokkadeduur (rood)", "Aantal en totale duur van stappen met status ‘geblokkeerd’.", "minimaliseren"]]} as const;
+/* ── CSV-helpers + volledige kolommenweergave ───────────────────────────────── */
+const KOLOM_VOLGORDE: string[] = [
+  'id', 'werkpakket_id', 'boring_nr', 'werkpakket_nr', 'locatie', 'lengte_m', 'diameter_mm', 'diepte_m',
+  'type_boring', 'klasse', 'aannemer', 'prioritering', 'status', 'status_ontwerp', 'hdd_tek_pct',
+  'status_werkterrein', 'status_berekening', 'apd_verantw', 'planning_apds', 'oplevering_toolgate',
+  'proefsleuf_nr', 'sondering_nr', 'bundel_configuratie', 'opmerkingen',
+  'startdatum', 'einddatum', 'intake_compleet', 'vervallen', 'created_at',
+];
+const NUMERIEKE_KOLOMMEN = new Set(['lengte_m', 'hdd_tek_pct', 'diameter_mm', 'diepte_m', 'werkpakket_id']);
+const BOOL_KOLOMMEN = new Set(['vervallen', 'intake_compleet', 'engineering_afgerond']);
+const NIET_IMPORTEREN = new Set(['id', 'created_at']); // id = matchsleutel, created_at = read-only
 
-const card: React.CSSProperties = { border: '1px solid var(--border)', borderRadius: 'var(--r-md, 10px)', background: 'var(--surface)', padding: '14px 16px' };
-const h2: React.CSSProperties = { fontSize: 15, fontWeight: 700, margin: '0 0 8px', color: 'var(--text)' };
-const par: React.CSSProperties = { fontSize: 13, lineHeight: 1.6, color: 'var(--text-2)', margin: '0 0 8px' };
-
-function Tabel({ rows }: { rows: readonly (readonly string[])[] }) {
-  if (!rows.length) return null;
-  const [head, ...body] = rows;
-  return (
-    <div style={{ overflowX: 'auto', border: '1px solid var(--border)', borderRadius: 'var(--r-md, 10px)' }}>
-      <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 12.5 }}>
-        <thead>
-          <tr>{head.map((c, i) => (
-            <th key={i} style={{ textAlign: 'left', padding: '8px 12px', borderBottom: '1px solid var(--border)', background: 'var(--surface-2, #f5f7fa)', color: 'var(--text-2)', fontWeight: 600, whiteSpace: 'nowrap' }}>{c}</th>
-          ))}</tr>
-        </thead>
-        <tbody>{body.map((r, ri) => (
-          <tr key={ri}>{r.map((c, ci) => (
-            <td key={ci} style={{ padding: '8px 12px', borderBottom: '0.5px solid var(--border)', color: 'var(--text-2)', lineHeight: 1.5, verticalAlign: 'top' }}>{c}</td>
-          ))}</tr>
-        ))}</tbody>
-      </table>
-    </div>
-  );
+function csvCel(v: unknown): string {
+  const s = v === null || v === undefined ? '' : String(v);
+  return /[";\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
 }
 
-function ProcesHVP() {
+/* Robuuste CSV-parser: detecteert ; of , als scheidingsteken, ondersteunt quotes. */
+function parseCSV(text: string): string[][] {
+  text = text.replace(/^\ufeff/, '');
+  const firstLine = text.split(/\r?\n/)[0] || '';
+  const delim = (firstLine.match(/;/g)?.length ?? 0) >= (firstLine.match(/,/g)?.length ?? 0) ? ';' : ',';
+  const rows: string[][] = [];
+  let cur: string[] = [], field = '', inQ = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQ) {
+      if (c === '"') { if (text[i + 1] === '"') { field += '"'; i++; } else inQ = false; }
+      else field += c;
+    } else if (c === '"') inQ = true;
+    else if (c === delim) { cur.push(field); field = ''; }
+    else if (c === '\n') { cur.push(field); rows.push(cur); cur = []; field = ''; }
+    else if (c !== '\r') field += c;
+  }
+  if (field !== '' || cur.length) { cur.push(field); rows.push(cur); }
+  return rows;
+}
+
+function WideTabel({ cols, rows }: { cols: string[]; rows: Record<string, unknown>[] }) {
   return (
-    <div style={{ maxWidth: 1000, display: 'flex', flexDirection: 'column', gap: 18 }}>
-      <div>
-        <h1 style={{ fontSize: 22, fontWeight: 700, margin: '0 0 4px' }}>Procesbeschrijving HDD-engineering</h1>
-        <p style={{ fontSize: 13, color: 'var(--text-3)', margin: 0 }}>Overdracht, processtappen, outputs &amp; doorlooptijden — HVP &amp; boorpartners (DTE, Voskuilen, Pol) · v1.0</p>
+    <div className="table-wrap">
+      <div className="tbl-scroll">
+        <table>
+          <thead>
+            <tr>{cols.map(c => <th key={c} style={{ whiteSpace: 'nowrap' }}>{c}</th>)}</tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 ? (
+              <tr><td colSpan={cols.length} style={{ padding: 20, textAlign: 'center', color: 'var(--text-3)' }}>Geen boringen</td></tr>
+            ) : rows.map((r, i) => (
+              <tr key={(r.id as string) ?? i}>
+                {cols.map(c => {
+                  const v = r[c];
+                  const s = v === null || v === undefined ? '' : String(v);
+                  return <td key={c} style={{ whiteSpace: 'nowrap', maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', color: 'var(--text-2)' }} title={s}>{s || '—'}</td>;
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
-
-      {DATA.secties.map((s, i) => (
-        <section key={i} style={card}>
-          <h2 style={h2}>{s.h}</h2>
-          {s.p.map((p, j) => <p key={j} style={par}>{p}</p>)}
-        </section>
-      ))}
-
-      <section>
-        <h2 style={{ ...h2, fontSize: 17, marginBottom: 12 }}>Processtappen, outputs &amp; doorlooptijden</h2>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {DATA.stappen.map((f, fi) => {
-            const isGate = f.fase.startsWith('GATE');
-            return (
-              <div key={fi}>
-                <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: 0.3, textTransform: 'uppercase', color: isGate ? 'var(--b-fg)' : 'var(--accent)', margin: '4px 0 8px' }}>{f.fase}</div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {f.items.map((s, si) => (
-                    <div key={si} style={{ ...card, borderLeft: '3px solid ' + (isGate ? 'var(--b-fg)' : 'var(--accent)'), padding: '12px 14px' }}>
-                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 4 }}>
-                        <span style={{ fontWeight: 800, color: isGate ? 'var(--b-fg)' : 'var(--accent)', fontSize: 13, minWidth: 18 }}>{s.nr}</span>
-                        <span style={{ fontWeight: 700, fontSize: 14 }}>{s.titel}</span>
-                      </div>
-                      <p style={{ ...par, margin: '0 0 6px' }}>{s.def}</p>
-                      {s.input ? <p style={{ fontSize: 11.5, color: 'var(--text-4)', margin: '0 0 8px', fontStyle: 'italic' }}>{s.input}</p> : null}
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 18px', fontSize: 12 }}>
-                        <span style={{ color: 'var(--text-3)' }}><b style={{ color: 'var(--text-2)' }}>Wie:</b> {s.verantw}</span>
-                        <span style={{ color: 'var(--text-3)' }}><b style={{ color: 'var(--text-2)' }}>Output:</b> {s.output}</span>
-                        <span style={{ color: 'var(--text-3)' }}><b style={{ color: 'var(--text-2)' }}>Doorloop:</b> {s.tijd}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-        <p style={{ fontSize: 11.5, color: 'var(--text-4)', marginTop: 8 }}>* Doorlooptijd = kalenderdoorloop incl. wacht-/reviewtijd; ‘Bew.’ = netto bewerkingstijd. wd = werkdagen, wk = weken. Waarden zijn uitgangspunten, te kalibreren met de boorpartners.</p>
-      </section>
-
-      <section style={card}>
-        <h2 style={h2}>Totale doorlooptijd &amp; kritiek pad</h2>
-        <ul style={{ margin: 0, paddingLeft: 18 }}>{DATA.doorloop.map((b, i) => <li key={i} style={{ ...par, margin: '0 0 6px' }}>{b}</li>)}</ul>
-      </section>
-
-      <section><h2 style={{ ...h2, fontSize: 16, marginBottom: 10 }}>Rolverdeling</h2><Tabel rows={DATA.rollen} /></section>
-      <section><h2 style={{ ...h2, fontSize: 16, marginBottom: 10 }}>Boorpartners &amp; uitvoeringsafstemming</h2><Tabel rows={DATA.partners} /></section>
-      <section><h2 style={{ ...h2, fontSize: 16, marginBottom: 10 }}>Verplichte aanleverset (gate)</h2><Tabel rows={DATA.aanleverset} /></section>
-      <section><h2 style={{ ...h2, fontSize: 16, marginBottom: 10 }}>Statusdefinities (stoplicht)</h2><Tabel rows={DATA.statussen} /></section>
-      <section><h2 style={{ ...h2, fontSize: 16, marginBottom: 10 }}>Dashboard — kolommen per boring</h2><Tabel rows={DATA.dashkol} /></section>
-      <section><h2 style={{ ...h2, fontSize: 16, marginBottom: 10 }}>Doorlooptijd-KPI&apos;s</h2><Tabel rows={DATA.kpis} /></section>
-
-      <section style={card}>
-        <h2 style={h2}>Vervolgstappen</h2>
-        <ul style={{ margin: 0, paddingLeft: 18 }}>{DATA.vervolg.map((b, i) => <li key={i} style={{ ...par, margin: '0 0 6px' }}>{b}</li>)}</ul>
-      </section>
     </div>
   );
 }
 
-/* ── Proces DTE — inhoud uit het kernblad (v1.0, 1-7-2026) ─────────────────── */
-function ProcesDTE() {
-  const stappen = [
-    { fase: 'FASE 0 — Voorontwerp / tracé-engineering (HVP)', items: [
-      { nr: '1', titel: 'Check tracé & bepalen boorlijn + afwijkruimte', tijd: '3–5 wd' },
-      { nr: '2', titel: 'Haalbaarheidsstudie HDD + boorlijn optimaliseren (go/no-go)', tijd: '2 wk (10 wd)' },
-      { nr: '4', titel: 'Beslismoment sonderingen — kritiek pad', tijd: 'besluit 0,5 d / bij ja 6 wk (30 wd)' },
-    ] },
-    { fase: 'GATE — Overdracht tracé → boring (sessie ± 0,5 d) · mijlpaal ‘documenten compleet’', items: [
-      { nr: 'G', titel: 'Overdracht naar boorpartner — aanleverset 100% compleet + overdrachtsverslag afgetekend', tijd: '± 0,5 d' },
-    ] },
-    { fase: 'FASE 1 — Definitief ontwerp / boor-engineering (boorpartner)', items: [
-      { nr: '3', titel: 'Concept boortekening', tijd: '3 wk (15 wd)' },
-      { nr: '5–6', titel: 'Concept D-GEO + voorlopige inrichtingstekening (parallel aan 3)', tijd: '3+5+6 samen ± 5 wk (25 wd)' },
-      { nr: '7', titel: 'Toets concept boring (uitvoeringspartij)', tijd: '5–10 wd review' },
-      { nr: '8', titel: 'Schouw (parallel aan 7)', tijd: '5–10 wd' },
-    ] },
-    { fase: 'FASE 2 — Definitief maken & oplevering', items: [
-      { nr: '9', titel: 'Tekeningen aanpassen (toets + schouw verwerken)', tijd: '3 wd' },
-      { nr: '10', titel: 'Engineering aanvullen & definitief maken', tijd: '5 wd' },
-      { nr: '11', titel: 'Akkoord definitieve boring (uitvoeringspartij)', tijd: '5–10 wd review' },
-      { nr: '12', titel: 'Definitieve oplevering in Relatics/DMS', tijd: '1 d' },
-    ] },
+/* ── Types ──────────────────────────────────────────────────────────────────── */
+interface Boring {
+  id: string;
+  werkpakket_id: number;
+  boring_nr: string;
+  werkpakket_nr?: string;
+  locatie?: string;
+  lengte_m?: number;
+  type_boring?: string;
+  aannemer?: string;
+  klasse?: string;
+  prioritering?: string;
+  oplevering_toolgate?: string;
+  planning_apds?: string;
+  apd_verantw?: string;
+  status_ontwerp?: string;
+  hdd_tek_pct?: number;
+  status_werkterrein?: string;
+  status_berekening?: string;
+  proefsleuf_nr?: string;
+  sondering_nr?: string;
+  bundel_configuratie?: string;
+  opmerkingen?: string;
+  status: string;
+  vervallen?: boolean;
+}
+
+/* ── Status kleur-codering (exact zoals Excel) ──────────────────────────────── */
+const STATUS_COLORS: Record<string, { bg: string; fg: string; pct: number; label: string }> = {
+  'Issue':        { bg: '#D70015', fg: '#fff',     pct: 0,   label: 'Issue' },
+  'Gestart':      { bg: '#F5A623', fg: '#fff',     pct: 25,  label: 'Gestart' },
+  'Afgekeurd':    { bg: '#E8830A', fg: '#fff',     pct: 40,  label: 'Afgekeurd' },
+  'Ter controle': { bg: '#F5C842', fg: '#1A1A1A',  pct: 50,  label: 'Ter controle' },
+  'Goedgekeurd':  { bg: '#8BC34A', fg: '#fff',     pct: 75,  label: 'Goedgekeurd' },
+  'Vrijgegeven':  { bg: '#1A7F3C', fg: '#fff',     pct: 100, label: 'Vrijgegeven' },
+  'Vertraagd':    { bg: '#D70015', fg: '#fff',     pct: 0,   label: 'Vertraagd' },
+  'Vervallen':    { bg: '#EBEBEB', fg: '#6E6E73',  pct: 0,   label: 'Vervallen' },
+  'Niet gestart': { bg: '#F5F5F7', fg: '#6E6E73',  pct: 0,   label: 'Niet gestart' },
+};
+
+function StatusPill({ status }: { status?: string }) {
+  if (!status) return <span style={{ color: '#9CA3AF', fontSize: 11 }}>—</span>;
+  const c = STATUS_COLORS[status] ?? { bg: '#F3F4F6', fg: '#374151', pct: 0, label: status };
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6,
+      background: c.bg, color: c.fg, fontSize: 11, fontWeight: 600,
+      padding: '3px 10px', borderRadius: 20, whiteSpace: 'nowrap' }}>
+      {c.label}
+    </span>
+  );
+}
+
+function TekBar({ pct }: { pct?: number }) {
+  if (pct == null) return <span style={{ color: '#9CA3AF', fontSize: 11 }}>—</span>;
+  const p = Math.round(pct * 100);
+  const c = STATUS_COLORS[
+    p === 100 ? 'Vrijgegeven' : p >= 75 ? 'Goedgekeurd' : p >= 50 ? 'Ter controle' : p > 0 ? 'Gestart' : 'Niet gestart'
   ];
-  const rollen: string[][] = [
-    ['Rol', 'Verantwoordelijk voor'],
-    ['Tracé-engineer — HVP', 'Tracéontwerp, voorgestelde boorlijn, afwijkruimte, afstemming perceeleigenaren. Eigenaar t/m de gate.'],
-    ['Boor-engineer — boorpartner', 'HDD-haalbaarheid + boorengineering (boortekening, D-GEO, inrichtingstekening). Eigenaar van het DO-traject ná de gate.'],
-    ['Toets / akkoord uitvoering', 'Vrijgave voor uitvoering. Partijspecifiek: DTE → Heijmans (Lizanne van Hal); Voskuilen/Pol → eigen uitvoering.'],
-    ['Proceseigenaar / regie', 'Bewaakt proces, dashboard en doorlooptijden — Patrick H. / ontwerpleiders.'],
-  ];
-  const aanleverset: string[][] = [
-    ['Document / item', 'Formaat'],
-    ['Tracé + boorlijn', 'DWG + PDF'],
-    ['Kadasteroverzicht percelen', 'PDF'],
-    ['Grondonderzoek (QuickScan)', 'PDF / data'],
-    ['Bestaande sonderingen', 'DWG'],
-    ['Afwijkruimte boorlijn', 'Notitie / tekening'],
-    ['Status perceeleigenaren', 'Notitie'],
-  ];
-  const afspraken = [
-    'Totale doorlooptijd ± 12–14 weken van vrijgave tracé tot oplevering, zónder aanvullende sonderingen (3/5/6 parallel, reviews gebundeld).',
-    'Sonderingen = grootste onzekerheid. Bij vergunningsplichtige boringen al in de VO-fase aanvragen, niet pas bij de D-GEO. Betredingstoestemming en bevoegd gezag (ProRail/RWS) kunnen weken extra kosten.',
-    'Service-afspraak reviews: toets (7) en akkoord (11) door de uitvoeringspartij ≤ 10 werkdagen — per partij vastleggen, zodat ze planbaar worden.',
-    'Bij no-go op haalbaarheid (stap 2): loop-back naar de tracé-engineer (HVP).',
-    'Dashboard verplicht per boring: processtap, status (open/loopt/gereed/geblokkeerd), wie aan zet, norm- vs. werkelijke doorlooptijd en gate-datum.',
-  ];
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{ flex: 1, height: 6, borderRadius: 3, background: '#E5E7EB', overflow: 'hidden', minWidth: 80 }}>
+        <div style={{ width: `${p}%`, height: '100%', background: c.bg, borderRadius: 3, transition: 'width .3s' }} />
+      </div>
+      <span style={{ fontSize: 11, fontWeight: 600, color: c.bg, minWidth: 34 }}>{p}%</span>
+    </div>
+  );
+}
+
+/* ── Detail modal ───────────────────────────────────────────────────────────── */
+function BoringDetail({
+  boring, project, onClose, onEdit,
+}: {
+  boring: Boring;
+  project?: string;
+  onClose: () => void;
+  onEdit: () => void;
+}) {
+  const vervallen = boring.vervallen;
 
   return (
-    <div style={{ maxWidth: 1000, display: 'flex', flexDirection: 'column', gap: 18 }}>
-      <div>
-        <h1 style={{ fontSize: 22, fontWeight: 700, margin: '0 0 4px' }}>Procesafspraken HDD-engineering — kernblad</h1>
-        <p style={{ fontSize: 13, color: 'var(--text-3)', margin: 0 }}>Project NuLelie (Liander) · v1.0 · HVP ↔ boorpartners DTE, Voskuilen, Pol · 1-7-2026</p>
-      </div>
-
-      <section style={card}>
-        <h2 style={h2}>Kernprincipe — één gate</h2>
-        <p style={par}>Eén overdrachtsmoment tussen tracé-engineer (HVP) en boor-engineer (boorpartner). Vóór de gate is HVP eigenaar (tracé, boorlijn, afwijkruimte); ná de gate de boorpartner (HDD-haalbaarheid t/m oplevering).</p>
-        <p style={par}>De gate gaat alleen open als de aanleverset 100% compleet is — dit is de harde, dateerbare mijlpaal ‘documenten compleet aangeleverd’. Zelfde proces voor alle drie de boorpartners (DTE nieuw geformaliseerd; Voskuilen/Pol herijken).</p>
-      </section>
-
-      <section>
-        <h2 style={{ ...h2, fontSize: 17, marginBottom: 12 }}>Processtappen &amp; doorlooptijd-normen</h2>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {stappen.map((f, fi) => {
-            const isGate = f.fase.startsWith('GATE');
-            return (
-              <div key={fi}>
-                <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: 0.3, textTransform: 'uppercase', color: isGate ? 'var(--b-fg)' : 'var(--accent)', margin: '4px 0 8px' }}>{f.fase}</div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {f.items.map((s, si) => (
-                    <div key={si} style={{ ...card, borderLeft: '3px solid ' + (isGate ? 'var(--b-fg)' : 'var(--accent)'), padding: '12px 14px' }}>
-                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                        <span style={{ fontWeight: 800, color: isGate ? 'var(--b-fg)' : 'var(--accent)', fontSize: 13, minWidth: 30 }}>{s.nr}</span>
-                        <span style={{ fontWeight: 700, fontSize: 14, flex: 1 }}>{s.titel}</span>
-                        <span style={{ fontSize: 12, color: 'var(--text-3)', whiteSpace: 'nowrap' }}><b style={{ color: 'var(--text-2)' }}>Norm:</b> {s.tijd}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
+    <Modal open onClose={onClose} maxWidth={680}
+      title={`${boring.boring_nr}${vervallen ? ' — Vervallen' : ''}${boring.prioritering ? ` ⚑ ${boring.prioritering}` : ''}`}
+      footer={
+        <div style={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+          <span style={{ fontSize: 11, color: '#9CA3AF', flex: 1 }}>{project}</span>
+          <button className="btn" onClick={onClose}>Sluiten</button>
+          <button className="btn btn-primary" onClick={onEdit} style={{ marginLeft: 8 }}>✎ Bewerken</button>
         </div>
-        <p style={{ fontSize: 11.5, color: 'var(--text-4)', marginTop: 8 }}>Stappen 2 en 4 zijn in dit kernblad naar Fase 0 (vóór de gate) verplaatst t.o.v. het HVP-proces. wd = werkdagen, wk = weken.</p>
-      </section>
+      }>
 
-      <section style={card}>
-        <h2 style={h2}>Hardste afspraken &amp; kritiek pad</h2>
-        <ul style={{ margin: 0, paddingLeft: 18 }}>{afspraken.map((b, i) => <li key={i} style={{ ...par, margin: '0 0 6px' }}>{b}</li>)}</ul>
-      </section>
+      {/* ── Sectie 1: HDD Gegevens ─────────────────────────────────────────── */}
+      <Section title="HDD Gegevens">
+        <Grid>
+          <Row label="Boor nummer"   value={boring.boring_nr} bold />
+          <Row label="Werkpakket"    value={boring.werkpakket_nr} />
+          <Row label="Locatie"       value={boring.locatie} span />
+          <Row label="Lengte HDD"    value={boring.lengte_m != null ? `${boring.lengte_m} m` : undefined} />
+          <Row label="Type"          value={boring.type_boring} />
+          <Row label="Klasse"        value={boring.klasse} chip />
+          <Row label="Aannemer"      value={boring.aannemer} />
+        </Grid>
+      </Section>
 
-      <section><h2 style={{ ...h2, fontSize: 16, marginBottom: 10 }}>Wie is waar eigenaar</h2><Tabel rows={rollen} /></section>
-      <section><h2 style={{ ...h2, fontSize: 16, marginBottom: 10 }}>Verplichte aanleverset (gate-checklist)</h2><Tabel rows={aanleverset} /></section>
+      {/* ── Sectie 2: Planning ────────────────────────────────────────────── */}
+      <Section title="Planning">
+        <Grid>
+          <Row label="APD verantw."  value={boring.apd_verantw} chip />
+          <Row label="Planning APD's" value={boring.planning_apds
+            ? new Date(boring.planning_apds).toLocaleDateString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric' })
+            : undefined} />
+          <Row label="Oplevering Toolgate" value={boring.oplevering_toolgate
+            ? new Date(boring.oplevering_toolgate).toLocaleDateString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric' })
+            : undefined} />
+        </Grid>
+      </Section>
+
+      {/* ── Sectie 3: Tekenwerk & Status ─────────────────────────────────── */}
+      <Section title="Tekenwerk & Status">
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+
+          <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: '160px 1fr', alignItems: 'center', gap: '0.5rem' }}>
+            <span style={{ fontSize: 11, color: '#6B7280', fontWeight: 500 }}>HDD Ontwerp</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <StatusPill status={boring.status_ontwerp} />
+              <TekBar pct={boring.hdd_tek_pct} />
+            </div>
+          </div>
+
+          <StatusRow label="Werkterrein inrichting" status={boring.status_werkterrein} />
+          <StatusRow label="Berekening"             status={boring.status_berekening} />
+        </div>
+      </Section>
+
+      {/* ── Sectie 4: Referenties ─────────────────────────────────────────── */}
+      <Section title="Referenties">
+        <Grid>
+          <Row label="Proefsleuf nr."      value={boring.proefsleuf_nr} />
+          <Row label="Sondering nr."       value={boring.sondering_nr} />
+          <Row label="Bundel configuratie" value={boring.bundel_configuratie} span />
+        </Grid>
+      </Section>
+
+      {/* ── Sectie 5: Opmerkingen ─────────────────────────────────────────── */}
+      {boring.opmerkingen && (
+        <Section title="Opmerkingen">
+          <p style={{ fontSize: 12, color: '#374151', lineHeight: 1.6, margin: 0,
+            background: '#FFFBEB', border: '0.5px solid #FDE68A', borderRadius: 8,
+            padding: '0.75rem 1rem', whiteSpace: 'pre-wrap' }}>
+            {boring.opmerkingen}
+          </p>
+        </Section>
+      )}
+    </Modal>
+  );
+}
+
+/* ── Hulpcomponenten detail ──────────────────────────────────────────────────── */
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div style={{ marginBottom: '1.125rem' }}>
+      <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em',
+        color: '#9CA3AF', marginBottom: '0.625rem', paddingBottom: '0.375rem',
+        borderBottom: '0.5px solid #E5E7EB' }}>
+        {title}
+      </div>
+      {children}
     </div>
   );
 }
 
-export default function ProcesPage() {
-  const [tab, setTab] = useState<'hvp' | 'dte'>('hvp');
-  const tabBtn = (actief: boolean): React.CSSProperties => ({
-    fontSize: 13, fontWeight: 600, padding: '7px 16px', border: '1px solid var(--border)',
-    borderRadius: 'var(--r-md, 10px)', cursor: 'pointer',
-    background: actief ? 'var(--accent)' : 'var(--surface)',
-    color: actief ? '#fff' : 'var(--text-2)',
-    borderColor: actief ? 'var(--accent)' : 'var(--border)',
-  });
+function Grid({ children }: { children: React.ReactNode }) {
+  return <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr 160px 1fr', gap: '0.5rem 0.75rem', alignItems: 'center' }}>{children}</div>;
+}
+
+function Row({ label, value, bold, span, chip }: { label: string; value?: string | null; bold?: boolean; span?: boolean; chip?: boolean }) {
+  return (
+    <>
+      <span style={{ fontSize: 11, color: '#6B7280', fontWeight: 500, gridColumn: span ? '1' : undefined }}>{label}</span>
+      <span style={{
+        fontSize: 12, fontWeight: bold ? 700 : 500, color: value ? '#0D1520' : '#D1D5DB',
+        gridColumn: span ? '2 / -1' : undefined,
+      }}>
+        {chip && value ? (
+          <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 9px', borderRadius: 6,
+            background: '#F3F4F6', color: '#374151', border: '0.5px solid #E5E7EB' }}>{value}</span>
+        ) : (value || '—')}
+      </span>
+    </>
+  );
+}
+
+function StatusRow({ label, status }: { label: string; status?: string }) {
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', alignItems: 'center', gap: '0.5rem' }}>
+      <span style={{ fontSize: 11, color: '#6B7280', fontWeight: 500 }}>{label}</span>
+      <StatusPill status={status} />
+    </div>
+  );
+}
+
+/* ── Constanten ─────────────────────────────────────────────────────────────── */
+const TYPES_BORING   = ['Gyro', 'Walk-over', 'Walkover', 'Nanodrill', 'Avegaar', 'Anders'];
+const KLASSEN        = ['9T', '17T', '27T', '50T', '>50T', '120T'];
+const AANNEMERS      = ['Heijmans', 'Heijmans DTE', 'Heijmans (Nano)', 'Pol', 'Voskuilen', 'Van Voskuilen', 'Pol/Voskuilen', 'Anders'];
+const ONTWERP_STATUS = ['Niet gestart', 'Gestart', 'Ter controle', 'Goedgekeurd', 'Vrijgegeven', 'Issue', 'Vertraagd', 'Vervallen'];
+const OVERIGE_STATUS = ['Niet gestart', 'Gestart', 'Ter controle', 'Goedgekeurd', 'Vrijgegeven', 'Voldoet', 'N.v.t.', 'Vervallen'];
+
+/* ── Hoofd-pagina ───────────────────────────────────────────────────────────── */
+export default function BoringenPage() {
+  const toast = useToast();
+  const { data, projects, loading, save, remove, reload } = useModuleData<Boring>('boringen', 'boring_nr');
+
+  const [wideMode, setWideMode]   = useState(false);
+  const [importing, setImporting] = useState(false);
+
+  const [search, setSearch]                 = useState('');
+  const [filterProject, setFilterProject]   = useState('');
+  const [filterType, setFilterType]         = useState('');
+  const [filterKlasse, setFilterKlasse]     = useState('');
+  const [filterAannemer, setFilterAannemer] = useState('');
+  const [filterStatus, setFilterStatus]     = useState('');
+  const [showVervallen, setShowVervallen]   = useState(false);
+  const [sortCol, setSortCol]               = useState<keyof Boring | null>(null);
+  const [sortDir, setSortDir]               = useState(1);
+
+  const [detailId, setDetailId] = useState<string | null>(null);
+  const [editId, setEditId]     = useState<string | null>(null);
+  const [editModal, setEditModal] = useState(false);
+  const [form, setForm] = useState<Partial<Boring>>({ status: 'Nog te starten', status_ontwerp: 'Niet gestart', vervallen: false });
+
+  const detailBoring  = data.find(d => d.id === detailId);
+  const detailProject = detailBoring ? projects.find(p => p.id === detailBoring.werkpakket_id)?.label : undefined;
+
+  const stats = useMemo(() => {
+    const a = data.filter(d => !d.vervallen);
+    return {
+      totaal:       a.length,
+      vrijgegeven:  a.filter(d => d.status_ontwerp === 'Vrijgegeven').length,
+      goedgekeurd:  a.filter(d => d.status_ontwerp === 'Goedgekeurd').length,
+      ter_controle: a.filter(d => d.status_ontwerp === 'Ter controle').length,
+      issue:        a.filter(d => ['Issue','Vertraagd'].includes(d.status_ontwerp??'')).length,
+      vervallen:    data.filter(d => d.vervallen).length,
+    };
+  }, [data]);
+
+  const rows = useMemo(() => {
+    let r = data.filter(d => {
+      if (!showVervallen && d.vervallen) return false;
+      if (showVervallen && !d.vervallen) return false;
+      if (filterProject && String(d.werkpakket_id) !== filterProject) return false;
+      if (filterType    && d.type_boring !== filterType) return false;
+      if (filterKlasse  && d.klasse !== filterKlasse) return false;
+      if (filterAannemer && d.aannemer !== filterAannemer) return false;
+      if (filterStatus  && d.status_ontwerp !== filterStatus) return false;
+      if (search) {
+        const q = search.toLowerCase();
+        return [d.boring_nr, d.werkpakket_nr, d.locatie, d.aannemer, d.bundel_configuratie]
+          .some(v => (v ?? '').toLowerCase().includes(q));
+      }
+      return true;
+    });
+    if (sortCol) r = [...r].sort((a, b) => {
+      const av = String(a[sortCol] ?? ''), bv = String(b[sortCol] ?? '');
+      return av < bv ? -sortDir : av > bv ? sortDir : 0;
+    });
+    return r;
+  }, [data, search, filterProject, filterType, filterKlasse, filterAannemer, filterStatus, showVervallen, sortCol, sortDir]);
+
+  /* Alle kolommen die in de data voorkomen (union), in een logische volgorde. */
+  const allCols = useMemo(() => {
+    const keys = new Set<string>();
+    for (const r of data) Object.keys(r as Record<string, unknown>).forEach(k => keys.add(k));
+    const geordend = KOLOM_VOLGORDE.filter(k => keys.has(k));
+    const rest = Array.from(keys).filter(k => !KOLOM_VOLGORDE.includes(k)).sort();
+    return [...geordend, ...rest];
+  }, [data]);
+
+  /* Export: gefilterde rijen × alle kolommen → CSV (;-gescheiden, met BOM voor Excel-NL). */
+  const exportCSV = () => {
+    const header = allCols.join(';');
+    const lines = rows.map(r => allCols.map(c => csvCel((r as Record<string, unknown>)[c])).join(';'));
+    const csv = [header, ...lines].join('\r\n');
+    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `boringen_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast(`${rows.length} boringen geëxporteerd`, 'success');
+  };
+
+  /* Import: match op id (of boring_nr + werkpakket_id), werk bestaande boringen bij.
+     Lege cellen worden overgeslagen (overschrijven bestaande data niet). */
+  const importCSV = async (file: File) => {
+    setImporting(true);
+    try {
+      const table = parseCSV(await file.text());
+      if (table.length < 2) { toast('Leeg of ongeldig CSV-bestand', 'error'); return; }
+      const header = table[0].map(h => h.trim());
+      const idIdx = header.indexOf('id');
+      let ok = 0, over = 0, mislukt = 0;
+      for (let i = 1; i < table.length; i++) {
+        const cells = table[i];
+        if (!cells.length || cells.every(c => c.trim() === '')) continue;
+        const rij: Record<string, string> = {};
+        header.forEach((h, j) => { rij[h] = (cells[j] ?? '').trim(); });
+
+        let doel = idIdx >= 0 && rij['id'] ? data.find(d => d.id === rij['id']) : undefined;
+        if (!doel && rij['boring_nr']) {
+          doel = data.find(d => d.boring_nr === rij['boring_nr'] && (!rij['werkpakket_id'] || String(d.werkpakket_id) === rij['werkpakket_id']));
+        }
+        if (!doel) { over++; continue; }
+
+        const patch: Record<string, unknown> = {};
+        for (const h of header) {
+          if (!h || NIET_IMPORTEREN.has(h)) continue;
+          const val = rij[h];
+          if (val === '') continue; // leeg → niet overschrijven
+          if (NUMERIEKE_KOLOMMEN.has(h)) { const n = Number(val.replace(',', '.')); if (!isNaN(n)) patch[h] = n; }
+          else if (BOOL_KOLOMMEN.has(h)) patch[h] = /^(true|ja|1|waar|x)$/i.test(val);
+          else patch[h] = val;
+        }
+        if (Object.keys(patch).length === 0) { over++; continue; }
+        try { await save(doel.id, patch as Partial<Boring>); ok++; } catch { mislukt++; }
+      }
+      await reload();
+      toast(`Import klaar — ${ok} bijgewerkt, ${over} overgeslagen${mislukt ? `, ${mislukt} mislukt` : ''}`, mislukt ? 'error' : 'success');
+    } catch (e) {
+      toast('Import mislukt: ' + (e as Error).message, 'error');
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const sort = (col: keyof Boring) => {
+    if (sortCol === col) setSortDir(d => -d); else { setSortCol(col); setSortDir(1); }
+  };
+  const srt = (col: keyof Boring) => sortCol === col ? (sortDir > 0 ? ' ↑' : ' ↓') : '';
+
+  const openEdit = (id?: string) => {
+    const d = id ? data.find(x => x.id === id) : undefined;
+    setForm(d ? { ...d } : { status: 'Nog te starten', status_ontwerp: 'Niet gestart', vervallen: false });
+    setEditId(id ?? null);
+    setDetailId(null);
+    setEditModal(true);
+  };
+
+  const handleSave = async () => {
+    if (!form.boring_nr?.trim()) { toast('Boor nr. is verplicht', 'error'); return; }
+    if (!form.werkpakket_id)     { toast('Kies een project', 'error'); return; }
+    const os = form.status_ontwerp ?? '';
+    let appStatus = 'Nog te starten';
+    if (os === 'Vrijgegeven' || os === 'Goedgekeurd') appStatus = 'Gereed';
+    else if (os === 'Ter controle') appStatus = 'Review';
+    else if (os === 'Gestart')      appStatus = 'Loopt';
+    else if (os === 'Issue' || os === 'Vertraagd') appStatus = 'Geblokkeerd';
+    try {
+      await save(editId, { ...form, status: appStatus, vervallen: form.vervallen ?? false } as Partial<Boring>);
+      toast(editId ? '✓ Opgeslagen' : '✓ Boring toegevoegd', 'success');
+      setEditModal(false);
+    } catch (e) { toast((e as Error).message, 'error'); }
+  };
+
+  const handleDelete = async () => {
+    if (!editId || !confirm('Boring verwijderen?')) return;
+    try { await remove(editId); toast('✓ Verwijderd', 'success'); setEditModal(false); }
+    catch (e) { toast((e as Error).message, 'error'); }
+  };
+
+  if (loading) return <div className="page-content"><div className="loading-bar" /></div>;
+
   return (
     <div className="page-content">
-      <h1 style={{ fontSize: 20, fontWeight: 600, margin: '0 0 14px' }}>Procesomschrijving</h1>
-      <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
-        <button type="button" style={tabBtn(tab === 'hvp')} onClick={() => setTab('hvp')}>Proces HVP</button>
-        <button type="button" style={tabBtn(tab === 'dte')} onClick={() => setTab('dte')}>Proces DTE</button>
+
+      {/* KPI balk */}
+      <div className="stats-bar">
+        <div className="stat-card"><span className="stat-num">{stats.totaal}</span><span className="stat-label">Actief</span></div>
+        <div className="stat-card stat-G"><span className="stat-num">{stats.vrijgegeven}</span><span className="stat-label">Vrijgegeven</span></div>
+        <div className="stat-card stat-G"><span className="stat-num">{stats.goedgekeurd}</span><span className="stat-label">Goedgekeurd</span></div>
+        <div className="stat-card stat-R"><span className="stat-num">{stats.ter_controle}</span><span className="stat-label">Ter controle</span></div>
+        <div className="stat-card stat-B"><span className="stat-num">{stats.issue}</span><span className="stat-label">Issue / Vertraagd</span></div>
+        <div className="stat-card" style={{ opacity: 0.55 }}><span className="stat-num">{stats.vervallen}</span><span className="stat-label">Vervallen</span></div>
       </div>
-      {tab === 'hvp' ? <ProcesHVP /> : <ProcesDTE />}
+
+      {/* Controls */}
+      <div className="controls-bar">
+        <div className="search-wrap">
+          <span className="search-icon"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="5" stroke="currentColor" strokeWidth="1.5"/><path d="M11 11l3 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg></span>
+          <input className="search-input" placeholder="Zoeken..." value={search} onChange={e => setSearch(e.target.value)} />
+        </div>
+        <select className="field-input" style={{ width: 'auto', padding: '4px 28px 4px 10px', minWidth: 140 }} value={filterProject} onChange={e => setFilterProject(e.target.value)}>
+          <option value="">Alle projecten</option>
+          {projects.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
+        </select>
+        <select className="field-input" style={{ width: 'auto', padding: '4px 28px 4px 10px' }} value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
+          <option value="">Alle statussen</option>
+          {ONTWERP_STATUS.map(s => <option key={s}>{s}</option>)}
+        </select>
+        <select className="field-input" style={{ width: 'auto', padding: '4px 28px 4px 10px' }} value={filterType} onChange={e => setFilterType(e.target.value)}>
+          <option value="">Alle types</option>
+          {TYPES_BORING.map(t => <option key={t}>{t}</option>)}
+        </select>
+        <select className="field-input" style={{ width: 'auto', padding: '4px 28px 4px 10px' }} value={filterKlasse} onChange={e => setFilterKlasse(e.target.value)}>
+          <option value="">Alle klassen</option>
+          {KLASSEN.map(k => <option key={k}>{k}</option>)}
+        </select>
+        <select className="field-input" style={{ width: 'auto', padding: '4px 28px 4px 10px' }} value={filterAannemer} onChange={e => setFilterAannemer(e.target.value)}>
+          <option value="">Alle aannemers</option>
+          {AANNEMERS.map(a => <option key={a}>{a}</option>)}
+        </select>
+        <button className={`tab${showVervallen ? ' active' : ''}`} onClick={() => setShowVervallen(v => !v)} style={{ fontSize: 11 }}>
+          {showVervallen ? '✕ Vervallen' : 'Toon vervallen'}
+        </button>
+        <button className="btn" onClick={() => setWideMode(w => !w)} style={{ fontSize: 11 }} title="Toon alle kolommen / alle data">
+          {wideMode ? '⊟ Compacte weergave' : '⊞ Alle kolommen'}
+        </button>
+        <button className="btn" onClick={exportCSV} style={{ fontSize: 11 }} title="Exporteer de zichtbare boringen (alle kolommen) naar CSV">⭳ Export CSV</button>
+        <label className="btn" style={{ fontSize: 11, cursor: importing ? 'default' : 'pointer' }} title="Importeer CSV — werkt bestaande boringen bij (match op id of boornummer)">
+          {importing ? '… Importeren' : '⭱ Import CSV'}
+          <input type="file" accept=".csv,text/csv" disabled={importing} style={{ display: 'none' }}
+            onChange={e => { const f = e.target.files?.[0]; if (f) importCSV(f); e.currentTarget.value = ''; }} />
+        </label>
+        <div style={{ flex: 1 }} />
+        <button className="btn btn-primary" onClick={() => openEdit()}>+ Boring toevoegen</button>
+      </div>
+
+      {/* Tabel — compacte weergave */}
+      {!wideMode && (
+      <div className="table-wrap">
+        <div className="tbl-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th className="sortable" onClick={() => sort('boring_nr')}>Boor nr{srt('boring_nr')}</th>
+                <th className="sortable" onClick={() => sort('werkpakket_nr')}>WP{srt('werkpakket_nr')}</th>
+                <th className="sortable" onClick={() => sort('locatie')}>Locatie{srt('locatie')}</th>
+                <th className="sortable" onClick={() => sort('lengte_m')}>L (m){srt('lengte_m')}</th>
+                <th className="sortable" onClick={() => sort('type_boring')}>Type{srt('type_boring')}</th>
+                <th className="sortable" onClick={() => sort('klasse')}>Klasse{srt('klasse')}</th>
+                <th className="sortable" onClick={() => sort('aannemer')}>Aannemer{srt('aannemer')}</th>
+                <th className="sortable" onClick={() => sort('status_ontwerp')}>HDD Ontwerp{srt('status_ontwerp')}</th>
+                <th>Tek %</th>
+                <th className="sortable" onClick={() => sort('status_werkterrein')}>Werkterrein{srt('status_werkterrein')}</th>
+                <th className="sortable" onClick={() => sort('status_berekening')}>Berekening{srt('status_berekening')}</th>
+                <th className="sortable" onClick={() => sort('planning_apds')}>Planning APD{srt('planning_apds')}</th>
+                <th className="sortable" onClick={() => sort('planning_apds')}>Weken</th>
+                <th>Bundel</th>
+                <th>Project</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.length === 0 ? (
+                <tr><td colSpan={16}><div className="empty-state"><strong>Geen boringen gevonden</strong>Pas de filters aan.</div></td></tr>
+              ) : rows.map(d => {
+                const sc = STATUS_COLORS[d.status_ontwerp ?? ''];
+                return (
+                  <tr key={d.id} onClick={() => setDetailId(d.id)}
+                    style={{ cursor: 'pointer', opacity: d.vervallen ? 0.4 : 1 }}>
+                    <td style={{ fontWeight: 600 }}>{d.boring_nr}</td>
+                    <td style={{ color: 'var(--text-3)', fontSize: 11 }}>{d.werkpakket_nr || '—'}</td>
+                    <td style={{ maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', color: 'var(--text-2)' }}>{d.locatie || '—'}</td>
+                    <td style={{ fontVariantNumeric: 'tabular-nums' }}>{d.lengte_m ?? '—'}</td>
+                    <td>{d.type_boring || '—'}</td>
+                    <td>
+                      {d.klasse ? <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 4,
+                        background: 'var(--surface3)', border: '0.5px solid var(--border)' }}>{d.klasse}</span> : '—'}
+                    </td>
+                    <td style={{ fontSize: 12, color: 'var(--text-2)' }}>{d.aannemer || '—'}</td>
+                    <td>
+                      {sc ? (
+                        <span style={{ fontSize: 10, fontWeight: 600, padding: '3px 9px', borderRadius: 20,
+                          background: sc.bg, color: sc.fg, whiteSpace: 'nowrap' }}>{d.status_ontwerp}</span>
+                      ) : <span style={{ color: 'var(--text-4)', fontSize: 11 }}>—</span>}
+                    </td>
+                    <td><TekBar pct={d.hdd_tek_pct} /></td>
+                    <td>
+                      {(() => { const c = STATUS_COLORS[d.status_werkterrein ?? '']; return c
+                        ? <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 20, background: c.bg, color: c.fg }}>{d.status_werkterrein}</span>
+                        : <span style={{ color: 'var(--text-4)', fontSize: 11 }}>—</span>; })()}
+                    </td>
+                    <td>
+                      {(() => { const c = STATUS_COLORS[d.status_berekening ?? '']; return c
+                        ? <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 20, background: c.bg, color: c.fg }}>{d.status_berekening}</span>
+                        : <span style={{ color: 'var(--text-4)', fontSize: 11 }}>—</span>; })()}
+                    </td>
+                    <td style={{ fontSize: 11, color: 'var(--text-3)', whiteSpace: 'nowrap' }}>
+                      {d.planning_apds ? new Date(d.planning_apds).toLocaleDateString('nl-NL', {day:'2-digit',month:'2-digit',year:'numeric'}) : '—'}
+                    </td>
+                    <td style={{ fontSize: 11, color: 'var(--text-3)', maxWidth: 110, overflow: 'hidden', textOverflow: 'ellipsis' }}>{d.bundel_configuratie || '—'}</td>
+                    <td style={{ fontSize: 11, color: 'var(--text-3)' }}>{projects.find(p => p.id === d.werkpakket_id)?.label ?? '—'}</td>
+                    <td onClick={e => e.stopPropagation()}>
+                      <button className="btn" style={{ fontSize: 11, padding: '2px 8px' }} onClick={() => openEdit(d.id)}>✎</button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      )}
+
+      {wideMode && <WideTabel cols={allCols} rows={rows as unknown as Record<string, unknown>[]} />}
+
+      {/* Detail modal */}
+      {detailId && detailBoring && (
+        <BoringDetail boring={detailBoring} project={detailProject}
+          onClose={() => setDetailId(null)}
+          onEdit={() => openEdit(detailId)} />
+      )}
+
+      {/* Edit modal */}
+      <Modal open={editModal} onClose={() => setEditModal(false)}
+        title={editId ? `${form.boring_nr ?? 'Boring'} bewerken` : 'Boring toevoegen'}
+        maxWidth={600}
+        footer={<>
+          {editId && <button className="btn btn-danger" style={{ marginRight: 'auto' }} onClick={handleDelete}>Verwijderen</button>}
+          <button className="btn" onClick={() => setEditModal(false)}>Annuleren</button>
+          <button className="btn btn-primary" onClick={handleSave}>Opslaan</button>
+        </>}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.875rem' }}>
+          <F label="Boor nr. *"><input className="field-input" value={form.boring_nr ?? ''} placeholder="HDD-001" onChange={e => setForm(f => ({ ...f, boring_nr: e.target.value }))} /></F>
+          <F label="Project *"><select className="field-input" value={form.werkpakket_id ?? ''} onChange={e => setForm(f => ({ ...f, werkpakket_id: parseInt(e.target.value) }))}><option value="">— Kies project —</option>{projects.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}</select></F>
+          <F label="Werkpakket nr."><input className="field-input" value={form.werkpakket_nr ?? ''} placeholder="WP01" onChange={e => setForm(f => ({ ...f, werkpakket_nr: e.target.value }))} /></F>
+          <F label="APD verantw."><input className="field-input" value={form.apd_verantw ?? ''} placeholder="ApD-1" onChange={e => setForm(f => ({ ...f, apd_verantw: e.target.value }))} /></F>
+          <F label="Locatie" span><input className="field-input" value={form.locatie ?? ''} onChange={e => setForm(f => ({ ...f, locatie: e.target.value }))} /></F>
+          <F label="Lengte HDD (m)"><input className="field-input" type="number" value={form.lengte_m ?? ''} onChange={e => setForm(f => ({ ...f, lengte_m: parseFloat(e.target.value) || undefined }))} /></F>
+          <F label="Type boring"><select className="field-input" value={form.type_boring ?? ''} onChange={e => setForm(f => ({ ...f, type_boring: e.target.value }))}><option value="">— Kies type —</option>{TYPES_BORING.map(t => <option key={t}>{t}</option>)}</select></F>
+          <F label="Klasse"><select className="field-input" value={form.klasse ?? ''} onChange={e => setForm(f => ({ ...f, klasse: e.target.value }))}><option value="">—</option>{KLASSEN.map(k => <option key={k}>{k}</option>)}</select></F>
+          <F label="Aannemer"><select className="field-input" value={form.aannemer ?? ''} onChange={e => setForm(f => ({ ...f, aannemer: e.target.value }))}><option value="">—</option>{AANNEMERS.map(a => <option key={a}>{a}</option>)}</select></F>
+          <F label="Bundel configuratie" span><input className="field-input" value={form.bundel_configuratie ?? ''} placeholder="1x200mm + 1x160mm" onChange={e => setForm(f => ({ ...f, bundel_configuratie: e.target.value }))} /></F>
+          <div style={{ gridColumn: '1/-1', height: '0.5px', background: 'var(--border)' }} />
+          <F label="HDD Ontwerp status" span>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {ONTWERP_STATUS.map(s => {
+                const c = STATUS_COLORS[s];
+                const active = form.status_ontwerp === s;
+                return (
+                  <button key={s} type="button" onClick={() => setForm(f => ({ ...f, status_ontwerp: s }))}
+                    style={{ fontSize: 11, fontWeight: 600, padding: '4px 10px', borderRadius: 20, cursor: 'pointer', fontFamily: 'inherit',
+                      border: active ? '2px solid transparent' : '1px solid #E5E7EB',
+                      background: active && c ? c.bg : '#F9FAFB',
+                      color: active && c ? c.fg : '#374151' }}>
+                    {s}
+                  </button>
+                );
+              })}
+            </div>
+          </F>
+          <F label="HDD tek %"><select className="field-input" value={form.hdd_tek_pct ?? ''} onChange={e => setForm(f => ({ ...f, hdd_tek_pct: e.target.value ? parseFloat(e.target.value) : undefined }))}><option value="">—</option><option value="0">0%</option><option value="0.25">25%</option><option value="0.5">50%</option><option value="0.75">75%</option><option value="1">100%</option></select></F>
+          <F label="Werkterrein"><select className="field-input" value={form.status_werkterrein ?? ''} onChange={e => setForm(f => ({ ...f, status_werkterrein: e.target.value }))}><option value="">—</option>{OVERIGE_STATUS.map(s => <option key={s}>{s}</option>)}</select></F>
+          <F label="Berekening"><select className="field-input" value={form.status_berekening ?? ''} onChange={e => setForm(f => ({ ...f, status_berekening: e.target.value }))}><option value="">—</option>{OVERIGE_STATUS.map(s => <option key={s}>{s}</option>)}</select></F>
+          <F label="Planning APD's"><input className="field-input" type="date" value={form.planning_apds ?? ''} onChange={e => setForm(f => ({ ...f, planning_apds: e.target.value }))} /></F>
+          <F label="Proefsleuf nr."><input className="field-input" value={form.proefsleuf_nr ?? ''} onChange={e => setForm(f => ({ ...f, proefsleuf_nr: e.target.value }))} /></F>
+          <F label="Sondering nr."><input className="field-input" value={form.sondering_nr ?? ''} onChange={e => setForm(f => ({ ...f, sondering_nr: e.target.value }))} /></F>
+          <F label="Prioritering"><input className="field-input" value={form.prioritering ?? ''} placeholder="bijv. PRIO" onChange={e => setForm(f => ({ ...f, prioritering: e.target.value }))} /></F>
+          <F label="Vervallen"><label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginTop: 6 }}><input type="checkbox" checked={form.vervallen ?? false} onChange={e => setForm(f => ({ ...f, vervallen: e.target.checked }))} style={{ width: 15, height: 15 }} /><span style={{ fontSize: 12 }}>Ja, boring is vervallen</span></label></F>
+          <F label="Opmerkingen" span><textarea className="field-input" rows={3} value={form.opmerkingen ?? ''} onChange={e => setForm(f => ({ ...f, opmerkingen: e.target.value }))} style={{ resize: 'vertical' }} /></F>
+        </div>
+      </Modal>
     </div>
   );
+}
+
+function F({ label, children, span }: { label: string; children: React.ReactNode; span?: boolean }) {
+  return <div style={{ gridColumn: span ? '1 / -1' : undefined }}><label className="field-label">{label}</label>{children}</div>;
 }
