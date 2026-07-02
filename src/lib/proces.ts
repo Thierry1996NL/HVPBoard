@@ -5,26 +5,25 @@ export type StapData = { status?: string; eigenaar?: string; plandatum?: string;
 export interface ProcesStap { id: string; nr: string; titel: string; wie: string; tijd: string }
 
 export const PROCES_FASEN: { fase: string; stappen: ProcesStap[] }[] = [
-  { fase: 'Fase 0 — VO / tracé-engineering (HVP)', stappen: [
-    { id: '1', nr: '1', titel: 'Check tracé & bepalen boorlijn', wie: 'Tracé-engineer (HVP)', tijd: '3–5 wd' },
+  { fase: 'Fase 0 — Voorontwerp / tracé-engineering (HVP)', stappen: [
+    { id: '1', nr: '1', titel: 'Check tracé & bepalen boorlijn + afwijkruimte', wie: 'Tracé-engineer (HVP)', tijd: '3–5 wd' },
+    { id: '2', nr: '2', titel: 'Haalbaarheidsstudie HDD + boorlijn optimaliseren (go/no-go)', wie: 'Boor-engineer', tijd: '2 wk (10 wd)' },
+    { id: '4', nr: '4', titel: 'Beslismoment sonderingen (kritiek pad)', wie: 'Boor-engineer / PL HVP', tijd: 'besluit 0,5 d / bij ja 6 wk (30 wd)' },
   ] },
   { fase: 'Gate — Overdracht tracé → boring', stappen: [
-    { id: 'G', nr: 'G', titel: 'Overdracht naar boorpartner (aanleverset 100% compleet)', wie: 'Tracé → Boor-engineer', tijd: '0,5 d' },
+    { id: 'G', nr: 'G', titel: 'Overdracht naar boorpartner (aanleverset 100% compleet)', wie: 'Tracé → Boor-engineer', tijd: '± 0,5 d' },
   ] },
-  { fase: 'Fase 1 — DO / boor-engineering (boorpartner)', stappen: [
-    { id: '2', nr: '2', titel: 'Haalbaarheidsstudie HDD (go/no-go)', wie: 'Boor-engineer', tijd: '3–5 wd' },
-    { id: '3', nr: '3', titel: 'Concept boortekening', wie: 'Boor-engineer', tijd: '5 wd' },
-    { id: '4', nr: '4', titel: 'Beslismoment sonderingen (kritiek pad)', wie: 'Boor-engineer / PL HVP', tijd: '+3–4 wk' },
-    { id: '5', nr: '5', titel: 'Concept D-GEO-berekening', wie: 'Boor-engineer', tijd: '5 wd' },
-    { id: '6', nr: '6', titel: 'Voorlopige inrichtingstekening werkterrein', wie: 'Boor-engineer', tijd: '3 wd' },
-    { id: '7', nr: '7', titel: 'Toets concept boring', wie: 'Uitvoeringspartij', tijd: '5–10 wd' },
-    { id: '8', nr: '8', titel: 'Schouw', wie: 'Schouwteam', tijd: '5–10 wd' },
+  { fase: 'Fase 1 — Definitief ontwerp / boor-engineering (boorpartner)', stappen: [
+    { id: '3', nr: '3', titel: 'Concept boortekening', wie: 'Boor-engineer', tijd: '3 wk (15 wd)' },
+    { id: '5-6', nr: '5–6', titel: 'Concept D-GEO + voorlopige inrichtingstekening (parallel aan 3)', wie: 'Boor-engineer', tijd: '3+5+6 samen ± 5 wk (25 wd)' },
+    { id: '7', nr: '7', titel: 'Toets concept boring (uitvoeringspartij)', wie: 'Uitvoeringspartij', tijd: '5–10 wd review' },
+    { id: '8', nr: '8', titel: 'Schouw (parallel aan 7)', wie: 'Schouwteam', tijd: '5–10 wd' },
   ] },
   { fase: 'Fase 2 — Definitief maken & oplevering', stappen: [
-    { id: '9', nr: '9', titel: 'Tekeningen aanpassen', wie: 'Boor-engineer', tijd: '3 wd' },
+    { id: '9', nr: '9', titel: 'Tekeningen aanpassen (toets + schouw verwerken)', wie: 'Boor-engineer', tijd: '3 wd' },
     { id: '10', nr: '10', titel: 'Engineering aanvullen & definitief maken', wie: 'Boor-engineer', tijd: '5 wd' },
-    { id: '11', nr: '11', titel: 'Akkoord definitieve boring', wie: 'Uitvoeringspartij', tijd: '5–10 wd' },
-    { id: '12', nr: '12', titel: 'Definitieve oplevering (gereed voor uitvoering)', wie: 'Boor-engineer', tijd: '1 d' },
+    { id: '11', nr: '11', titel: 'Akkoord definitieve boring (uitvoeringspartij)', wie: 'Uitvoeringspartij', tijd: '5–10 wd review' },
+    { id: '12', nr: '12', titel: 'Definitieve oplevering in Relatics/DMS', wie: 'Boor-engineer', tijd: '1 d' },
   ] },
 ];
 
