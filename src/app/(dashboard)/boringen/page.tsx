@@ -15,10 +15,16 @@ const KOLOM_VOLGORDE: string[] = [
 ];
 const NUMERIEKE_KOLOMMEN = new Set(['lengte_m', 'hdd_tek_pct', 'diameter_mm', 'diepte_m', 'werkpakket_id']);
 const BOOL_KOLOMMEN = new Set(['vervallen', 'intake_compleet', 'engineering_afgerond']);
+
+/* Keuzelijsten voor inline bewerken in de tabel. */
+const STATUS_OPTS = ['Niet gestart', 'Gestart', 'Ter controle', 'Afgekeurd', 'Goedgekeurd', 'Vrijgegeven', 'Issue', 'Vertraagd', 'Vervallen'];
+const TYPE_OPTS = ['Walk-over', 'Gyro', 'Nanodrill'];
+const KLASSE_OPTS = ['9T', '17T', '27T', '50T'];
 const NIET_IMPORTEREN = new Set(['id', 'created_at']); // id = matchsleutel, created_at = read-only
 
 function csvCel(v: unknown): string {
-  const s = v === null || v === undefined ? '' : String(v);
+  if (v === null || v === undefined) return '';
+  const s = typeof v === 'object' ? JSON.stringify(v) : String(v);
   return /[";\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
 }
 
@@ -298,6 +304,8 @@ export default function BoringenPage() {
   const [detailId, setDetailId] = useState<string | null>(null);
   const [editId, setEditId]     = useState<string | null>(null);
   const [editModal, setEditModal] = useState(false);
+  const [inlineEdit, setInlineEdit] = useState<{ id: string; field: string } | null>(null);
+  const [inlineVal, setInlineVal]   = useState('');
   const [form, setForm] = useState<Partial<Boring>>({ status: 'Nog te starten', status_ontwerp: 'Niet gestart', vervallen: false });
 
   const detailBoring  = data.find(d => d.id === detailId);
@@ -410,6 +418,24 @@ export default function BoringenPage() {
   };
   const srt = (col: keyof Boring) => sortCol === col ? (sortDir > 0 ? ' ↑' : ' ↓') : '';
 
+  /* Inline bewerken van een tabelcel. */
+  const startInline = (d: Boring, field: string) => {
+    let v: unknown = (d as unknown as Record<string, unknown>)[field];
+    if (field === 'planning_apds' && v) v = String(v).slice(0, 10);
+    else if (field === 'hdd_tek_pct') v = v == null ? '' : String(Math.round(Number(v) * 100));
+    setInlineEdit({ id: d.id, field });
+    setInlineVal(v == null ? '' : String(v));
+  };
+  const saveInline = async (id: string, field: string, raw: string) => {
+    setInlineEdit(null);
+    let value: unknown = raw.trim();
+    if (value === '') value = null;
+    else if (field === 'hdd_tek_pct') { const n = Number(raw.replace(',', '.')); value = isNaN(n) ? null : Math.max(0, Math.min(1, n / 100)); }
+    else if (NUMERIEKE_KOLOMMEN.has(field)) { const n = Number(raw.replace(',', '.')); value = isNaN(n) ? null : n; }
+    try { await save(id, { [field]: value } as unknown as Partial<Boring>); }
+    catch (e) { toast((e as Error).message, 'error'); }
+  };
+
   const openEdit = (id?: string) => {
     const d = id ? data.find(x => x.id === id) : undefined;
     setForm(d ? { ...d } : { status: 'Nog te starten', status_ontwerp: 'Niet gestart', vervallen: false });
@@ -494,7 +520,6 @@ export default function BoringenPage() {
             onChange={e => { const f = e.target.files?.[0]; if (f) importCSV(f); e.currentTarget.value = ''; }} />
         </label>
         <div style={{ flex: 1 }} />
-        <button className="btn btn-primary" onClick={() => openEdit()}>+ Boring toevoegen</button>
       </div>
 
       {/* Tabel — compacte weergave */}
@@ -527,41 +552,64 @@ export default function BoringenPage() {
                 <tr><td colSpan={16}><div className="empty-state"><strong>Geen boringen gevonden</strong>Pas de filters aan.</div></td></tr>
               ) : rows.map(d => {
                 const sc = STATUS_COLORS[d.status_ontwerp ?? ''];
+                const isEd = (f: string) => inlineEdit?.id === d.id && inlineEdit.field === f;
+                const inp = (field: string, kind: 'text' | 'number' | 'date') => (
+                  <input autoFocus type={kind} value={inlineVal}
+                    style={{ width: '100%', fontSize: 12, padding: '2px 5px', border: '1px solid var(--accent)', borderRadius: 4, boxSizing: 'border-box', background: 'var(--surface)', color: 'var(--text)' }}
+                    onClick={e => e.stopPropagation()}
+                    onChange={e => setInlineVal(e.target.value)}
+                    onBlur={() => saveInline(d.id, field, inlineVal)}
+                    onKeyDown={e => { if (e.key === 'Enter') saveInline(d.id, field, inlineVal); else if (e.key === 'Escape') setInlineEdit(null); }} />
+                );
+                const sel = (field: string, opts: { v: string; l: string }[]) => (
+                  <select autoFocus value={inlineVal}
+                    style={{ width: '100%', fontSize: 12, padding: '2px 4px', border: '1px solid var(--accent)', borderRadius: 4, background: 'var(--surface)', color: 'var(--text)' }}
+                    onClick={e => e.stopPropagation()}
+                    onChange={e => saveInline(d.id, field, e.target.value)}
+                    onBlur={() => setInlineEdit(null)}>
+                    <option value="">—</option>
+                    {opts.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}
+                  </select>
+                );
+                const statusBadge = (val?: string | null) => {
+                  const c = STATUS_COLORS[val ?? ''];
+                  return c ? <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 20, background: c.bg, color: c.fg, whiteSpace: 'nowrap' }}>{val}</span>
+                    : <span style={{ color: 'var(--text-4)', fontSize: 11 }}>—</span>;
+                };
+                const statusOpts = STATUS_OPTS.map(s => ({ v: s, l: s }));
                 return (
-                  <tr key={d.id} onClick={() => setDetailId(d.id)}
-                    style={{ cursor: 'pointer', opacity: d.vervallen ? 0.4 : 1 }}>
-                    <td style={{ fontWeight: 600 }}>{d.boring_nr}</td>
-                    <td style={{ color: 'var(--text-3)', fontSize: 11 }}>{d.werkpakket_nr || '—'}</td>
-                    <td style={{ maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', color: 'var(--text-2)' }}>{d.locatie || '—'}</td>
-                    <td style={{ fontVariantNumeric: 'tabular-nums' }}>{d.lengte_m ?? '—'}</td>
-                    <td>{d.type_boring || '—'}</td>
-                    <td>
-                      {d.klasse ? <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 4,
-                        background: 'var(--surface3)', border: '0.5px solid var(--border)' }}>{d.klasse}</span> : '—'}
-                    </td>
-                    <td style={{ fontSize: 12, color: 'var(--text-2)' }}>{d.aannemer || '—'}</td>
-                    <td>
-                      {sc ? (
-                        <span style={{ fontSize: 10, fontWeight: 600, padding: '3px 9px', borderRadius: 20,
-                          background: sc.bg, color: sc.fg, whiteSpace: 'nowrap' }}>{d.status_ontwerp}</span>
-                      ) : <span style={{ color: 'var(--text-4)', fontSize: 11 }}>—</span>}
-                    </td>
-                    <td><TekBar pct={d.hdd_tek_pct} /></td>
-                    <td>
-                      {(() => { const c = STATUS_COLORS[d.status_werkterrein ?? '']; return c
-                        ? <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 20, background: c.bg, color: c.fg }}>{d.status_werkterrein}</span>
-                        : <span style={{ color: 'var(--text-4)', fontSize: 11 }}>—</span>; })()}
-                    </td>
-                    <td>
-                      {(() => { const c = STATUS_COLORS[d.status_berekening ?? '']; return c
-                        ? <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 20, background: c.bg, color: c.fg }}>{d.status_berekening}</span>
-                        : <span style={{ color: 'var(--text-4)', fontSize: 11 }}>—</span>; })()}
-                    </td>
-                    <td style={{ fontSize: 11, color: 'var(--text-3)', whiteSpace: 'nowrap' }}>
-                      {d.planning_apds ? new Date(d.planning_apds).toLocaleDateString('nl-NL', {day:'2-digit',month:'2-digit',year:'numeric'}) : '—'}
-                    </td>
-                    <td style={{ fontSize: 11, color: 'var(--text-3)', maxWidth: 110, overflow: 'hidden', textOverflow: 'ellipsis' }}>{d.bundel_configuratie || '—'}</td>
-                    <td style={{ fontSize: 11, color: 'var(--text-3)' }}>{projects.find(p => p.id === d.werkpakket_id)?.label ?? '—'}</td>
+                  <tr key={d.id} style={{ opacity: d.vervallen ? 0.4 : 1 }}>
+                    <td style={{ fontWeight: 600, cursor: 'pointer' }} title="Open details"
+                      onClick={() => setDetailId(d.id)}>{d.boring_nr}</td>
+                    <td className="editable" style={{ color: 'var(--text-3)', fontSize: 11 }} onClick={() => !isEd('werkpakket_nr') && startInline(d, 'werkpakket_nr')}>
+                      {isEd('werkpakket_nr') ? inp('werkpakket_nr', 'text') : (d.werkpakket_nr || '—')}</td>
+                    <td className="editable" style={{ maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', color: 'var(--text-2)' }} onClick={() => !isEd('locatie') && startInline(d, 'locatie')}>
+                      {isEd('locatie') ? inp('locatie', 'text') : (d.locatie || '—')}</td>
+                    <td className="editable" style={{ fontVariantNumeric: 'tabular-nums' }} onClick={() => !isEd('lengte_m') && startInline(d, 'lengte_m')}>
+                      {isEd('lengte_m') ? inp('lengte_m', 'number') : (d.lengte_m ?? '—')}</td>
+                    <td className="editable" onClick={() => !isEd('type_boring') && startInline(d, 'type_boring')}>
+                      {isEd('type_boring') ? sel('type_boring', TYPE_OPTS.map(t => ({ v: t, l: t }))) : (d.type_boring || '—')}</td>
+                    <td className="editable" onClick={() => !isEd('klasse') && startInline(d, 'klasse')}>
+                      {isEd('klasse') ? sel('klasse', KLASSE_OPTS.map(k => ({ v: k, l: k })))
+                        : (d.klasse ? <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 4, background: 'var(--surface3)', border: '0.5px solid var(--border)' }}>{d.klasse}</span> : '—')}</td>
+                    <td className="editable" style={{ fontSize: 12, color: 'var(--text-2)' }} onClick={() => !isEd('aannemer') && startInline(d, 'aannemer')}>
+                      {isEd('aannemer') ? inp('aannemer', 'text') : (d.aannemer || '—')}</td>
+                    <td className="editable" onClick={() => !isEd('status_ontwerp') && startInline(d, 'status_ontwerp')}>
+                      {isEd('status_ontwerp') ? sel('status_ontwerp', statusOpts) : statusBadge(d.status_ontwerp)}</td>
+                    <td className="editable" onClick={() => !isEd('hdd_tek_pct') && startInline(d, 'hdd_tek_pct')} title="Klik om % aan te passen (0–100)">
+                      {isEd('hdd_tek_pct') ? inp('hdd_tek_pct', 'number') : <TekBar pct={d.hdd_tek_pct} />}</td>
+                    <td className="editable" onClick={() => !isEd('status_werkterrein') && startInline(d, 'status_werkterrein')}>
+                      {isEd('status_werkterrein') ? sel('status_werkterrein', statusOpts) : statusBadge(d.status_werkterrein)}</td>
+                    <td className="editable" onClick={() => !isEd('status_berekening') && startInline(d, 'status_berekening')}>
+                      {isEd('status_berekening') ? sel('status_berekening', statusOpts) : statusBadge(d.status_berekening)}</td>
+                    <td className="editable" style={{ fontSize: 11, color: 'var(--text-3)', whiteSpace: 'nowrap' }} onClick={() => !isEd('planning_apds') && startInline(d, 'planning_apds')}>
+                      {isEd('planning_apds') ? inp('planning_apds', 'date')
+                        : (d.planning_apds ? new Date(d.planning_apds).toLocaleDateString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—')}</td>
+                    <td className="editable" style={{ fontSize: 11, color: 'var(--text-3)', maxWidth: 110, overflow: 'hidden', textOverflow: 'ellipsis' }} onClick={() => !isEd('bundel_configuratie') && startInline(d, 'bundel_configuratie')}>
+                      {isEd('bundel_configuratie') ? inp('bundel_configuratie', 'text') : (d.bundel_configuratie || '—')}</td>
+                    <td className="editable" style={{ fontSize: 11, color: 'var(--text-3)' }} onClick={() => !isEd('werkpakket_id') && startInline(d, 'werkpakket_id')}>
+                      {isEd('werkpakket_id') ? sel('werkpakket_id', projects.map(p => ({ v: String(p.id), l: p.label })))
+                        : (projects.find(p => p.id === d.werkpakket_id)?.label ?? '—')}</td>
                     <td onClick={e => e.stopPropagation()}>
                       <button className="btn" style={{ fontSize: 11, padding: '2px 8px' }} onClick={() => openEdit(d.id)}>✎</button>
                     </td>
