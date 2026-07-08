@@ -296,7 +296,8 @@ export default function BoringenPage() {
   const [filterType, setFilterType]         = useState('');
   const [filterKlasse, setFilterKlasse]     = useState('');
   const [filterAannemer, setFilterAannemer] = useState('');
-  const [filterStatus, setFilterStatus]     = useState('');
+  const [filterStatuses, setFilterStatuses] = useState<string[]>([]);
+  const [statusOpen, setStatusOpen]         = useState(false);
   const [showVervallen, setShowVervallen]   = useState(false);
   const [sortCol, setSortCol]               = useState<keyof Boring | null>(null);
   const [sortDir, setSortDir]               = useState(1);
@@ -331,7 +332,7 @@ export default function BoringenPage() {
       if (filterType    && d.type_boring !== filterType) return false;
       if (filterKlasse  && d.klasse !== filterKlasse) return false;
       if (filterAannemer && d.aannemer !== filterAannemer) return false;
-      if (filterStatus  && d.status_ontwerp !== filterStatus) return false;
+      if (filterStatuses.length && !filterStatuses.includes(d.status_ontwerp ?? '')) return false;
       if (search) {
         const q = search.toLowerCase();
         return [d.boring_nr, d.werkpakket_nr, d.locatie, d.aannemer, d.bundel_configuratie]
@@ -344,7 +345,7 @@ export default function BoringenPage() {
       return av < bv ? -sortDir : av > bv ? sortDir : 0;
     });
     return r;
-  }, [data, search, filterProject, filterType, filterKlasse, filterAannemer, filterStatus, showVervallen, sortCol, sortDir]);
+  }, [data, search, filterProject, filterType, filterKlasse, filterAannemer, filterStatuses, showVervallen, sortCol, sortDir]);
 
   /* Alle kolommen die in de data voorkomen (union), in een logische volgorde. */
   const allCols = useMemo(() => {
@@ -491,10 +492,29 @@ export default function BoringenPage() {
           <option value="">Alle projecten</option>
           {projects.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
         </select>
-        <select className="field-input" style={{ width: 'auto', padding: '4px 28px 4px 10px' }} value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
-          <option value="">Alle statussen</option>
-          {ONTWERP_STATUS.map(s => <option key={s}>{s}</option>)}
-        </select>
+        <div style={{ position: 'relative' }}>
+          <button type="button" className="field-input" style={{ width: 'auto', minWidth: 140, padding: '4px 12px', cursor: 'pointer', textAlign: 'left' }}
+            onClick={() => setStatusOpen(o => !o)}>
+            {filterStatuses.length === 0 ? 'Alle statussen' : `${filterStatuses.length} status${filterStatuses.length === 1 ? '' : 'sen'} ▾`}
+          </button>
+          {statusOpen && (
+            <>
+              <div style={{ position: 'fixed', inset: 0, zIndex: 40 }} onClick={() => setStatusOpen(false)} />
+              <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 4, zIndex: 41, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, boxShadow: '0 6px 20px rgba(0,0,0,0.14)', padding: 6, minWidth: 190 }}>
+                {ONTWERP_STATUS.map(s => (
+                  <label key={s} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px', fontSize: 12, cursor: 'pointer', borderRadius: 4 }}>
+                    <input type="checkbox" checked={filterStatuses.includes(s)}
+                      onChange={() => setFilterStatuses(prev => prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s])} />
+                    {s}
+                  </label>
+                ))}
+                {filterStatuses.length > 0 && (
+                  <button className="btn" style={{ fontSize: 11, width: '100%', marginTop: 4 }} onClick={() => setFilterStatuses([])}>Wissen</button>
+                )}
+              </div>
+            </>
+          )}
+        </div>
         <select className="field-input" style={{ width: 'auto', padding: '4px 28px 4px 10px' }} value={filterType} onChange={e => setFilterType(e.target.value)}>
           <option value="">Alle types</option>
           {TYPES_BORING.map(t => <option key={t}>{t}</option>)}

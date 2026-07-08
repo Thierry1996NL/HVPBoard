@@ -40,7 +40,18 @@ export default function IntakePage() {
   const [form, setForm] = useState<Partial<Boring>>({});
 
   const KLASSEN = ['9T', '17T', '27T', '50T'];
-  const TYPES = ['Walk-over', 'Gyro'];
+  const TYPES = ['Walk-over', 'Gyro', 'Nanodrill'];
+
+  /* Eerstvolgende oplopende boornummer binnen een project (HDD-XXX). */
+  const nextBoringNr = (projectWp: number): string => {
+    let max = 0;
+    for (const b of data) {
+      if (b.werkpakket_id !== projectWp) continue;
+      const m = (b.boring_nr ?? '').match(/(\d+)/);
+      if (m) max = Math.max(max, parseInt(m[1], 10));
+    }
+    return `HDD-${String(max + 1).padStart(3, '0')}`;
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -61,7 +72,8 @@ export default function IntakePage() {
   const gekozen = (b: Boring) => keuze[b.id] ?? bepaalOpdrachtgever(b.klasse, b.lengte_m) ?? '';
 
   const openNieuw = () => {
-    setForm({ werkpakket_id: wp === 0 ? 1 : wp, klasse: '9T', type_boring: 'Walk-over' });
+    const startWp = wp === 0 ? 1 : wp;
+    setForm({ werkpakket_id: startWp, boring_nr: nextBoringNr(startWp), klasse: '', type_boring: '' });
     setFormOpen(true);
   };
 
@@ -200,11 +212,11 @@ export default function IntakePage() {
         }>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <label style={veldLabel}>Project
-            <select className="field-input" value={form.werkpakket_id ?? ''} onChange={e => setForm(f => ({ ...f, werkpakket_id: Number(e.target.value) }))}>
+            <select className="field-input" value={form.werkpakket_id ?? ''} onChange={e => { const w = Number(e.target.value); setForm(f => ({ ...f, werkpakket_id: w, boring_nr: nextBoringNr(w) })); }}>
               {PROJECTEN.map(p => <option key={p.wp} value={p.wp}>{p.naam}</option>)}
             </select>
           </label>
-          <label style={veldLabel}>Boornummer
+          <label style={veldLabel}>Boornummer <span style={{ fontWeight: 400, color: 'var(--text-4)' }}>(automatisch voorgesteld — aan te passen)</span>
             <input className="field-input" placeholder="bijv. HDD-001" value={form.boring_nr ?? ''} onChange={e => setForm(f => ({ ...f, boring_nr: e.target.value }))} />
           </label>
           <label style={veldLabel}>Locatie
@@ -213,6 +225,7 @@ export default function IntakePage() {
           <div style={{ display: 'flex', gap: 12 }}>
             <label style={{ ...veldLabel, flex: 1 }}>Klasse
               <select className="field-input" value={form.klasse ?? ''} onChange={e => setForm(f => ({ ...f, klasse: e.target.value }))}>
+                <option value="">Onbekend / n.t.b.</option>
                 {KLASSEN.map(k => <option key={k} value={k}>{k}</option>)}
               </select>
             </label>
@@ -222,6 +235,7 @@ export default function IntakePage() {
           </div>
           <label style={veldLabel}>Type
             <select className="field-input" value={form.type_boring ?? ''} onChange={e => setForm(f => ({ ...f, type_boring: e.target.value }))}>
+              <option value="">Onbekend / n.t.b.</option>
               {TYPES.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
           </label>
