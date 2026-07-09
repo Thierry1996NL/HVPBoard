@@ -37,7 +37,7 @@ const NAV: NavItem[] = [
   },
   {
     href: '/lemmer',
-    label: 'Boringen (nieuw)',
+    label: 'Boringen',
     icon: <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M8 2v12M5 5l3-3 3 3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/><ellipse cx="8" cy="13" rx="4" ry="1.5" stroke="currentColor" strokeWidth="1.4"/></svg>,
   },
   {

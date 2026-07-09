@@ -9,6 +9,7 @@ import { bepaalOpdrachtgever, OPDRACHTGEVERS } from '@/lib/proces';
 interface Boring {
   id: string;
   werkpakket_id?: number;
+  werkpakket_nr?: string;
   boring_nr?: string;
   locatie?: string;
   klasse?: string;
@@ -57,7 +58,7 @@ export default function IntakePage() {
     setLoading(true);
     const { data: rows } = await createClient()
       .from('boringen')
-      .select('id, werkpakket_id, boring_nr, locatie, klasse, lengte_m, type_boring, aannemer, vervallen, intake_compleet')
+      .select('id, werkpakket_id, werkpakket_nr, boring_nr, locatie, klasse, lengte_m, type_boring, aannemer, vervallen, intake_compleet')
       .order('boring_nr', { ascending: true });
     setData((rows ?? []) as unknown as Boring[]);
     setLoading(false);
@@ -83,6 +84,7 @@ export default function IntakePage() {
     setBezig(true);
     const payload = {
       werkpakket_id: form.werkpakket_id,
+      werkpakket_nr: form.werkpakket_nr ?? null,
       boring_nr: form.boring_nr,
       locatie: form.locatie ?? null,
       klasse: form.klasse ?? null,
@@ -165,22 +167,23 @@ export default function IntakePage() {
         <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 13 }}>
           <thead>
             <tr style={{ background: 'var(--surface-2, #f5f7fa)' }}>
-              {['Project', 'Boor nr', 'Locatie', 'Klasse', 'L (m)', 'Type', 'Voorstel', 'Opdrachtgever', ''].map((h, i) => (
+              {['Project', 'Boor nr', 'WP', 'Locatie', 'Klasse', 'L (m)', 'Type', 'Voorstel', 'Opdrachtgever', ''].map((h, i) => (
                 <th key={i} style={{ textAlign: 'left', padding: '8px 12px', borderBottom: '1px solid var(--border)', color: 'var(--text-2)', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={9} style={{ padding: 20, textAlign: 'center', color: 'var(--text-3)' }}>Laden…</td></tr>
+              <tr><td colSpan={10} style={{ padding: 20, textAlign: 'center', color: 'var(--text-3)' }}>Laden…</td></tr>
             ) : pending.length === 0 ? (
-              <tr><td colSpan={9} style={{ padding: 24, textAlign: 'center', color: 'var(--text-3)' }}>Geen boringen in de intake — alles is doorgezet naar het project.</td></tr>
+              <tr><td colSpan={10} style={{ padding: 24, textAlign: 'center', color: 'var(--text-3)' }}>Geen boringen in de intake — alles is doorgezet naar het project.</td></tr>
             ) : pending.map(b => {
               const voorstel = bepaalOpdrachtgever(b.klasse, b.lengte_m);
               return (
                 <tr key={b.id}>
                   <td style={cel}>{PROJECTEN.find(p => p.wp === b.werkpakket_id)?.naam ?? '—'}</td>
                   <td style={{ ...cel, fontWeight: 700 }}>{b.boring_nr ?? '—'}</td>
+                  <td style={{ ...cel, color: 'var(--text-3)' }}>{b.werkpakket_nr ?? '—'}</td>
                   <td style={cel}>{b.locatie ?? '—'}</td>
                   <td style={cel}>{b.klasse ?? '—'}</td>
                   <td style={cel}>{b.lengte_m ?? '—'}</td>
@@ -218,6 +221,9 @@ export default function IntakePage() {
           </label>
           <label style={veldLabel}>Boornummer <span style={{ fontWeight: 400, color: 'var(--text-4)' }}>(automatisch voorgesteld — aan te passen)</span>
             <input className="field-input" placeholder="bijv. HDD-001" value={form.boring_nr ?? ''} onChange={e => setForm(f => ({ ...f, boring_nr: e.target.value }))} />
+          </label>
+          <label style={veldLabel}>Werkpakket <span style={{ fontWeight: 400, color: 'var(--text-4)' }}>(optioneel, bijv. WP-4)</span>
+            <input className="field-input" placeholder="bijv. WP-4" value={form.werkpakket_nr ?? ''} onChange={e => setForm(f => ({ ...f, werkpakket_nr: e.target.value }))} />
           </label>
           <label style={veldLabel}>Locatie
             <input className="field-input" value={form.locatie ?? ''} onChange={e => setForm(f => ({ ...f, locatie: e.target.value }))} />
