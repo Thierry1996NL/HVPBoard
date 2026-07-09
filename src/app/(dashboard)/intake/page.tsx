@@ -37,6 +37,9 @@ export default function IntakePage() {
   const [keuze, setKeuze] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [bezig, setBezig] = useState(false);
+  const [inlineEdit, setInlineEdit] = useState<{ id: string; field: string } | null>(null);
+  const [inlineVal, setInlineVal] = useState('');
+  const [verwijderId, setVerwijderId] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [form, setForm] = useState<Partial<Boring>>({});
 
@@ -71,6 +74,31 @@ export default function IntakePage() {
   );
 
   const gekozen = (b: Boring) => keuze[b.id] ?? bepaalOpdrachtgever(b.klasse, b.lengte_m) ?? '';
+
+  /* Inline bewerken van een boring in de intake-lijst. */
+  const startInline = (b: Boring, field: string) => {
+    const v = (b as unknown as Record<string, unknown>)[field];
+    setInlineEdit({ id: b.id, field });
+    setInlineVal(v == null ? '' : String(v));
+  };
+  const saveInline = async (id: string, field: string, raw: string) => {
+    setInlineEdit(null);
+    let value: unknown = raw.trim();
+    if (value === '') value = null;
+    else if (field === 'lengte_m') { const n = Number(String(value).replace(',', '.')); value = isNaN(n) ? null : n; }
+    const { error } = await createClient().from('boringen').update({ [field]: value } as never).eq('id', id);
+    if (error) { toast(error.message, 'error'); return; }
+    setData(prev => prev.map(x => (x.id === id ? { ...x, [field]: value } : x)));
+  };
+
+  /* Boring verwijderen uit de intake (harde delete — staat nog niet in een project). */
+  const verwijderBoring = async (b: Boring) => {
+    const { error } = await createClient().from('boringen').delete().eq('id', b.id);
+    setVerwijderId(null);
+    if (error) { toast(error.message, 'error'); return; }
+    setData(prev => prev.filter(x => x.id !== b.id));
+    toast(`${b.boring_nr ?? 'Boring'} verwijderd`, 'success');
+  };
 
   const openNieuw = () => {
     const startWp = wp === 0 ? 1 : wp;
@@ -167,27 +195,50 @@ export default function IntakePage() {
         <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 13 }}>
           <thead>
             <tr style={{ background: 'var(--surface-2, #f5f7fa)' }}>
-              {['Project', 'Boor nr', 'WP', 'Locatie', 'Klasse', 'L (m)', 'Type', 'Voorstel', 'Opdrachtgever', ''].map((h, i) => (
+              {['Project', 'Boor nr', 'WP', 'Locatie', 'Klasse', 'L (m)', 'Type', 'Voorstel', 'Opdrachtgever', '', ''].map((h, i) => (
                 <th key={i} style={{ textAlign: 'left', padding: '8px 12px', borderBottom: '1px solid var(--border)', color: 'var(--text-2)', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={10} style={{ padding: 20, textAlign: 'center', color: 'var(--text-3)' }}>Laden…</td></tr>
+              <tr><td colSpan={11} style={{ padding: 20, textAlign: 'center', color: 'var(--text-3)' }}>Laden…</td></tr>
             ) : pending.length === 0 ? (
-              <tr><td colSpan={10} style={{ padding: 24, textAlign: 'center', color: 'var(--text-3)' }}>Geen boringen in de intake — alles is doorgezet naar het project.</td></tr>
+              <tr><td colSpan={11} style={{ padding: 24, textAlign: 'center', color: 'var(--text-3)' }}>Geen boringen in de intake — alles is doorgezet naar het project.</td></tr>
             ) : pending.map(b => {
               const voorstel = bepaalOpdrachtgever(b.klasse, b.lengte_m);
+              const isEd = (f: string) => inlineEdit?.id === b.id && inlineEdit.field === f;
+              const inp = (field: string, kind: 'text' | 'number' = 'text', width = 90) => (
+                <input autoFocus type={kind} value={inlineVal}
+                  style={{ width, fontSize: 12, padding: '2px 5px', border: '1px solid var(--accent)', borderRadius: 4, boxSizing: 'border-box', background: 'var(--surface)', color: 'var(--text)' }}
+                  onChange={e => setInlineVal(e.target.value)}
+                  onBlur={() => saveInline(b.id, field, inlineVal)}
+                  onKeyDown={e => { if (e.key === 'Enter') saveInline(b.id, field, inlineVal); else if (e.key === 'Escape') setInlineEdit(null); }} />
+              );
+              const sel = (field: string, opts: string[]) => (
+                <select autoFocus value={inlineVal}
+                  style={{ fontSize: 12, padding: '2px 4px', border: '1px solid var(--accent)', borderRadius: 4, background: 'var(--surface)', color: 'var(--text)' }}
+                  onChange={e => saveInline(b.id, field, e.target.value)}
+                  onBlur={() => setInlineEdit(null)}>
+                  <option value="">—</option>
+                  {opts.map(o => <option key={o} value={o}>{o}</option>)}
+                </select>
+              );
               return (
                 <tr key={b.id}>
                   <td style={cel}>{PROJECTEN.find(p => p.wp === b.werkpakket_id)?.naam ?? '—'}</td>
-                  <td style={{ ...cel, fontWeight: 700 }}>{b.boring_nr ?? '—'}</td>
-                  <td style={{ ...cel, color: 'var(--text-3)' }}>{b.werkpakket_nr ?? '—'}</td>
-                  <td style={cel}>{b.locatie ?? '—'}</td>
-                  <td style={cel}>{b.klasse ?? '—'}</td>
-                  <td style={cel}>{b.lengte_m ?? '—'}</td>
-                  <td style={cel}>{b.type_boring ?? '—'}</td>
+                  <td style={{ ...cel, fontWeight: 700, cursor: 'pointer' }} onClick={() => !isEd('boring_nr') && startInline(b, 'boring_nr')}>
+                    {isEd('boring_nr') ? inp('boring_nr') : (b.boring_nr ?? '—')}</td>
+                  <td style={{ ...cel, color: 'var(--text-3)', cursor: 'pointer' }} onClick={() => !isEd('werkpakket_nr') && startInline(b, 'werkpakket_nr')}>
+                    {isEd('werkpakket_nr') ? inp('werkpakket_nr', 'text', 70) : (b.werkpakket_nr ?? '—')}</td>
+                  <td style={{ ...cel, cursor: 'pointer' }} onClick={() => !isEd('locatie') && startInline(b, 'locatie')}>
+                    {isEd('locatie') ? inp('locatie', 'text', 180) : (b.locatie ?? '—')}</td>
+                  <td style={{ ...cel, cursor: 'pointer' }} onClick={() => !isEd('klasse') && startInline(b, 'klasse')}>
+                    {isEd('klasse') ? sel('klasse', KLASSEN) : (b.klasse ?? '—')}</td>
+                  <td style={{ ...cel, cursor: 'pointer' }} onClick={() => !isEd('lengte_m') && startInline(b, 'lengte_m')}>
+                    {isEd('lengte_m') ? inp('lengte_m', 'number', 70) : (b.lengte_m ?? '—')}</td>
+                  <td style={{ ...cel, cursor: 'pointer' }} onClick={() => !isEd('type_boring') && startInline(b, 'type_boring')}>
+                    {isEd('type_boring') ? sel('type_boring', TYPES) : (b.type_boring ?? '—')}</td>
                   <td style={{ ...cel, fontWeight: 600, color: voorstel ? 'var(--accent)' : 'var(--text-4)' }}>{voorstel ?? 'handmatig'}</td>
                   <td style={cel}>
                     <select className="field-input" style={{ fontSize: 12, minWidth: 110, padding: '3px 8px' }}
@@ -198,6 +249,9 @@ export default function IntakePage() {
                   </td>
                   <td style={cel}>
                     <button className="btn btn-primary" style={{ fontSize: 12, padding: '3px 12px', whiteSpace: 'nowrap' }} onClick={() => doorzetten(b)}>Doorzetten →</button>
+                  </td>
+                  <td style={cel}>
+                    <button className="btn" style={{ fontSize: 12, padding: '3px 8px', color: 'var(--b-fg)' }} title="Verwijderen" onClick={() => setVerwijderId(b.id)}>✕</button>
                   </td>
                 </tr>
               );
@@ -252,6 +306,19 @@ export default function IntakePage() {
             </strong>
           </div>
         </div>
+      </Modal>
+
+      <Modal open={!!verwijderId} onClose={() => setVerwijderId(null)} title="Boring verwijderen" maxWidth={380}
+        footer={
+          <>
+            <button className="btn" onClick={() => setVerwijderId(null)}>Annuleren</button>
+            <button className="btn" style={{ background: 'var(--b-bg)', color: 'var(--b-fg)', borderColor: 'var(--b-fg)' }}
+              onClick={() => { const b = data.find(x => x.id === verwijderId); if (b) verwijderBoring(b); }}>Verwijderen</button>
+          </>
+        }>
+        <p style={{ fontSize: 13, color: 'var(--text-2)', margin: 0 }}>
+          Weet je zeker dat je <strong>{data.find(x => x.id === verwijderId)?.boring_nr ?? 'deze boring'}</strong> wilt verwijderen? Dit kan niet ongedaan worden gemaakt.
+        </p>
       </Modal>
     </div>
   );
