@@ -319,6 +319,7 @@ export default function LemmerPage() {
   const [intakeMode, setIntakeMode] = useState(false);
   const [intakeKeuze, setIntakeKeuze] = useState<Record<string, string>>({});
   const [kpi, setKpi]         = useState<string>('actief');
+  const [toonAfgerond, setToonAfgerond] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const toggleExpand = (id: string) => setExpanded(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const [expandedFases, setExpandedFases] = useState<Set<string>>(new Set());
@@ -468,7 +469,8 @@ export default function LemmerPage() {
       if (wp !== 0 && d.werkpakket_id !== wp) return false;
       if (intakeMode) { if (d.intake_compleet === true) return false; }
       else { if (d.intake_compleet !== true) return false; }
-      if (kpi === 'vervallen') { if (!d.vervallen) return false; }
+      if (!toonAfgerond) { if (d.gereed || d.vervallen) return false; }
+      else if (kpi === 'vervallen') { if (!d.vervallen) return false; }
       else { if (d.vervallen) return false; if (kpi !== 'actief' && boringHealth(d) !== kpi) return false; }
       if (search) {
         const q = search.toLowerCase();
@@ -484,7 +486,7 @@ export default function LemmerPage() {
     if (fEntries.length) r = r.filter(d => fEntries.every(([id, v]) =>
       colFilterValue(d, id as ColId).toLowerCase().includes((v as string).trim().toLowerCase())));
     return r;
-  }, [data, search, kpi, sortCol, sortDir, colFilters, wp, intakeMode]);
+  }, [data, search, kpi, sortCol, sortDir, colFilters, wp, intakeMode, toonAfgerond]);
 
   /* Aantal boringen dat nog in de intake staat (huidig project of alle). */
   const intakeCount = useMemo(
@@ -782,7 +784,7 @@ export default function LemmerPage() {
           <button key={c.id} type="button"
             className={`stat-card stat-btn ${c.cls ?? ''}${kpi === c.id ? ' active' : ''}`}
             style={c.id === 'vervallen' && kpi !== 'vervallen' ? { opacity: 0.55 } : undefined}
-            onClick={() => setKpi(c.id)}>
+            onClick={() => { setKpi(c.id); if (c.id === 'vervallen') setToonAfgerond(true); }}>
             <span className="stat-num">{c.num}</span><span className="stat-label">{c.label}</span>
           </button>
         ))}
@@ -799,6 +801,11 @@ export default function LemmerPage() {
         </button>
         <button className="btn" onClick={handleOpslaan} disabled={opslaan} style={{ fontSize: 11 }} title="Synchroniseren met de database (wijzigingen worden al automatisch opgeslagen)">
           {opslaan ? '… Opslaan' : '💾 Opslaan'}
+        </button>
+        <button className="btn" onClick={() => setToonAfgerond(v => !v)}
+          style={{ fontSize: 11, ...(toonAfgerond ? { borderColor: 'var(--accent)', color: 'var(--accent)' } : {}) }}
+          title="Standaard worden gereed en vervallen boringen verborgen voor overzicht">
+          {toonAfgerond ? '✕ Verberg gereed & vervallen' : 'Toon gereed & vervallen'}
         </button>
         <div style={{ flex: 1 }} />
         <div style={{ position: 'relative' }}>
