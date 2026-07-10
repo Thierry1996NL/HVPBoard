@@ -461,7 +461,7 @@ export default function LemmerPage() {
     const a = proj.filter(d => !d.vervallen);
     let groen = 0, geel = 0, rood = 0;
     for (const d of a) { const h = boringHealth(d); if (h === 'rood') rood++; else if (h === 'geel') geel++; else groen++; }
-    return { totaal: a.length, groen, geel, rood, vervallen: proj.filter(d => d.vervallen).length };
+    return { totaal: a.length, groen, geel, rood, vervallen: proj.filter(d => d.vervallen).length, gereed: proj.filter(d => d.gereed && !d.vervallen).length };
   }, [data, wp]);
 
   const rows = useMemo(() => {
@@ -471,6 +471,7 @@ export default function LemmerPage() {
       else { if (d.intake_compleet !== true) return false; }
       if (!toonAfgerond) { if (d.gereed || d.vervallen) return false; }
       else if (kpi === 'vervallen') { if (!d.vervallen) return false; }
+      else if (kpi === 'gereed') { if (!d.gereed || d.vervallen) return false; }
       else { if (d.vervallen) return false; if (kpi !== 'actief' && boringHealth(d) !== kpi) return false; }
       if (search) {
         const q = search.toLowerCase();
@@ -713,6 +714,7 @@ export default function LemmerPage() {
     { id: 'groen',     num: stats.groen,     label: 'Op schema', cls: 'stat-G' },
     { id: 'geel',      num: stats.geel,      label: 'Aandacht',  cls: 'stat-A' },
     { id: 'rood',      num: stats.rood,      label: 'Te laat',   cls: 'stat-R' },
+    { id: 'gereed',    num: stats.gereed,    label: 'Gereed' },
     { id: 'vervallen', num: stats.vervallen, label: 'Vervallen' },
   ];
 
@@ -783,8 +785,8 @@ export default function LemmerPage() {
         {kpiCards.map(c => (
           <button key={c.id} type="button"
             className={`stat-card stat-btn ${c.cls ?? ''}${kpi === c.id ? ' active' : ''}`}
-            style={c.id === 'vervallen' && kpi !== 'vervallen' ? { opacity: 0.55 } : undefined}
-            onClick={() => { setKpi(c.id); if (c.id === 'vervallen') setToonAfgerond(true); }}>
+            style={(c.id === 'vervallen' || c.id === 'gereed') && kpi !== c.id ? { opacity: 0.55 } : undefined}
+            onClick={() => { setKpi(c.id); if (c.id === 'vervallen' || c.id === 'gereed') setToonAfgerond(true); }}>
             <span className="stat-num">{c.num}</span><span className="stat-label">{c.label}</span>
           </button>
         ))}
