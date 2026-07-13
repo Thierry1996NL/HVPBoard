@@ -332,25 +332,12 @@ export default function LemmerPage() {
   const [hidden, setHidden]           = useState<Set<ColId>>(new Set(DEFAULT_HIDDEN));
   const [colPickerOpen, setColPickerOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
-  /* Sticky bovenblok (titel/tabs/kaarten/werkbalk) — hoogte gemeten zodat de
-     tabelkop er precies op aansluit tijdens verticaal scrollen. */
-  const HDR_H = 48; // moet gelijk blijven aan --hdr-h in globals.css
-  const stickyBlockRef = useRef<HTMLDivElement>(null);
-  const headRow1Ref = useRef<HTMLTableRowElement>(null);
-  const [stickyBlockH, setStickyBlockH] = useState(0);
-  const [headRow1H, setHeadRow1H] = useState(0);
-  useEffect(() => {
-    const measure = () => {
-      if (stickyBlockRef.current) setStickyBlockH(stickyBlockRef.current.offsetHeight);
-      if (headRow1Ref.current) setHeadRow1H(headRow1Ref.current.offsetHeight);
-    };
-    measure();
-    const ro = new ResizeObserver(measure);
-    if (stickyBlockRef.current) ro.observe(stickyBlockRef.current);
-    if (headRow1Ref.current) ro.observe(headRow1Ref.current);
-    window.addEventListener('resize', measure);
-    return () => { ro.disconnect(); window.removeEventListener('resize', measure); };
-  }, [wp, filtersOpen, kpi]);
+  /* Horizontale scroll-synchronisatie tussen de vaste kop-tabel (in het sticky
+     bovenblok) en de scrollende data-tabel eronder — zo blijft de kop altijd
+     zichtbaar zonder fragiele pixel-berekeningen voor verticale positionering. */
+  const headerScrollRef = useRef<HTMLDivElement>(null);
+  const bodyScrollRef = useRef<HTMLDivElement>(null);
+  const syncScrollFromBody = () => { if (headerScrollRef.current && bodyScrollRef.current) headerScrollRef.current.scrollLeft = bodyScrollRef.current.scrollLeft; };
   const [colFilters, setColFilters]   = useState<Partial<Record<ColId, string>>>({});
   const activeFilters = Object.values(colFilters).filter(v => (v ?? '').trim()).length;
 
@@ -395,9 +382,7 @@ export default function LemmerPage() {
   /* Dwingt een exacte kolombreedte af (anders mag de browser 'm oprekken op inhoud,
      waardoor sticky left-offsets niet meer kloppen en er een kiertje ontstaat). */
   const fixedW = (w: number): React.CSSProperties => ({ width: w, minWidth: w, maxWidth: w, overflow: 'hidden' });
-  /* Verticale sticky-offset: de tabelkop sluit aan direct onder het sticky bovenblok. */
-  const theadTop = HDR_H + stickyBlockH;
-  const theadRow2Top = theadTop + headRow1H;
+  const HDR_H = 48; // moet gelijk blijven aan --hdr-h in globals.css
   const stickyProjectLeft = STICKY_META_W + STICKY_NUM_W;
   const stickyBoringLeft = stickyProjectLeft + (wp === 0 ? STICKY_PROJECT_W : 0);
   const stickyGrey = 'var(--surface2)';
@@ -791,7 +776,7 @@ export default function LemmerPage() {
         .stat-card.stat-A .stat-num { color: var(--r-fg); }
         .stat-card.stat-R .stat-num { color: var(--b-fg); }
       `}</style>
-      <div ref={stickyBlockRef} style={{ position: 'sticky', top: HDR_H, zIndex: 15, background: 'var(--bg)', paddingBottom: 2 }}>
+      <div style={{ position: 'sticky', top: HDR_H, zIndex: 15, background: 'var(--bg)', paddingBottom: 2 }}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 10 }}>
         <h1 style={{ fontSize: 20, fontWeight: 600, margin: 0 }}>{wp === 0 ? 'Alle projecten' : project.naam}</h1>
         <span style={{ fontSize: 12, color: 'var(--text-4)' }}>
@@ -865,8 +850,81 @@ export default function LemmerPage() {
 
       </div>
 
+      {/* Vaste kop-tabel — leeft ín het sticky bovenblok, dus geen aparte verticale
+          sticky-berekening meer nodig. Horizontaal scrollen wordt gesynchroniseerd
+          met de databcody-tabel eronder. */}
+      <div ref={headerScrollRef} style={{ overflowX: 'hidden' }}>
+        <table className="data-table" style={{ marginBottom: 0 }}>
+          <colgroup>
+            <col style={{ width: STICKY_META_W }} />
+            <col style={{ width: STICKY_NUM_W }} />
+            {wp === 0 && <col style={{ width: STICKY_PROJECT_W }} />}
+            <col style={{ width: STICKY_BORING_W }} />
+            {visibleCols.map(id => <col key={id} />)}
+            <col />
+          </colgroup>
+          <thead>
+            <tr>
+              <th style={{ ...fixedW(STICKY_META_W), position: 'sticky', left: 0, zIndex: 6, background: stickyGrey }}></th>
+              <th style={{ ...fixedW(STICKY_NUM_W), textAlign: 'center', color: 'var(--text-4)', fontWeight: 600, position: 'sticky', left: STICKY_META_W, zIndex: 6, background: stickyGrey }} title="Volgnummer">#</th>
+              {wp === 0 && (
+                <th style={{ ...fixedW(STICKY_PROJECT_W), position: 'sticky', left: stickyProjectLeft, zIndex: 6, background: 'var(--surface2)' }}>Project</th>
+              )}
+              <th style={{ ...fixedW(STICKY_BORING_W), position: 'sticky', left: stickyBoringLeft, zIndex: 6, background: 'var(--surface2)', boxShadow: '2px 0 4px -2px rgba(0,0,0,0.10)' }}
+                className="sortable" onClick={() => sort('boring_nr')}>
+                Boor nr{srt('boring_nr')}
+              </th>
+              {visibleCols.map(id => {
+                const col = columns[id];
+                const sortable = !!col.sortKey;
+                const cls = ['col-draggable'];
+                if (sortable) cls.push('sortable');
+                if (dragCol === id) cls.push('dragging');
+                if (dragOverCol === id && dragCol && dragCol !== id) cls.push('drag-over');
+                return (
+                  <th key={id} className={cls.join(' ')} draggable title="Sleep om te verplaatsen"
+                    onDragStart={e => onDragStart(e, id)} onDragOver={e => onDragOver(e, id)}
+                    onDrop={e => onDrop(e, id)} onDragEnd={onDragEnd}
+                    onClick={sortable ? () => sort(col.sortKey!) : undefined}>
+                    {col.label}{sortable ? srt(col.sortKey!) : null}
+                  </th>
+                );
+              })}
+              <th></th>
+            </tr>
+            {filtersOpen && (
+              <tr>
+                <th style={{ ...fixedW(STICKY_META_W), padding: '2px 4px', textAlign: 'center', position: 'sticky', left: 0, zIndex: 6, background: stickyGrey }}>
+                  {activeFilters > 0 && (
+                    <button className="btn" title="Filters wissen" style={{ fontSize: 10, padding: '1px 5px' }} onClick={() => setColFilters({})}>✕</button>
+                  )}
+                </th>
+                <th style={{ ...fixedW(STICKY_NUM_W), position: 'sticky', left: STICKY_META_W, zIndex: 6, background: stickyGrey }}></th>
+                {wp === 0 && (
+                  <th style={{ ...fixedW(STICKY_PROJECT_W), padding: '2px 6px', position: 'sticky', left: stickyProjectLeft, zIndex: 6, background: 'var(--surface2)' }}>
+                    <input className="inline-edit" style={{ width: '100%', minWidth: 64, fontWeight: 400 }} placeholder="filter…"
+                      value={colFilters['project'] ?? ''} onChange={e => setColFilters(f => ({ ...f, project: e.target.value }))} />
+                  </th>
+                )}
+                <th style={{ ...fixedW(STICKY_BORING_W), padding: '2px 6px', position: 'sticky', left: stickyBoringLeft, zIndex: 6, background: 'var(--surface2)', boxShadow: '2px 0 4px -2px rgba(0,0,0,0.10)' }}>
+                  <input className="inline-edit" style={{ width: '100%', minWidth: 64, fontWeight: 400 }} placeholder="filter…"
+                    value={colFilters['boring_nr'] ?? ''} onChange={e => setColFilters(f => ({ ...f, boring_nr: e.target.value }))} />
+                </th>
+                {visibleCols.map(id => (
+                  <th key={id} style={{ padding: '2px 6px' }}>
+                    <input className="inline-edit" style={{ width: '100%', minWidth: 64, fontWeight: 400 }} placeholder="filter…"
+                      value={colFilters[id] ?? ''} onChange={e => setColFilters(f => ({ ...f, [id]: e.target.value }))} />
+                  </th>
+                ))}
+                <th></th>
+              </tr>
+            )}
+          </thead>
+        </table>
+      </div>
+
       <div className="table-wrap">
-        <div className="tbl-scroll">
+        <div className="tbl-scroll" ref={bodyScrollRef} onScroll={syncScrollFromBody}>
           <table className="data-table">
             <colgroup>
               <col style={{ width: STICKY_META_W }} />
@@ -876,64 +934,6 @@ export default function LemmerPage() {
               {visibleCols.map(id => <col key={id} />)}
               <col />
             </colgroup>
-            <thead>
-              <tr ref={headRow1Ref}>
-                <th style={{ ...fixedW(STICKY_META_W), position: 'sticky', left: 0, top: theadTop, zIndex: 6, background: stickyGrey }}></th>
-                <th style={{ ...fixedW(STICKY_NUM_W), textAlign: 'center', color: 'var(--text-4)', fontWeight: 600, position: 'sticky', left: STICKY_META_W, top: theadTop, zIndex: 6, background: stickyGrey }} title="Volgnummer">#</th>
-                {wp === 0 && (
-                  <th style={{ ...fixedW(STICKY_PROJECT_W), position: 'sticky', left: stickyProjectLeft, top: theadTop, zIndex: 6, background: 'var(--surface2)' }}>Project</th>
-                )}
-                <th style={{ ...fixedW(STICKY_BORING_W), position: 'sticky', left: stickyBoringLeft, top: theadTop, zIndex: 6, background: 'var(--surface2)', boxShadow: '2px 0 4px -2px rgba(0,0,0,0.10)' }}
-                  className="sortable" onClick={() => sort('boring_nr')}>
-                  Boor nr{srt('boring_nr')}
-                </th>
-                {visibleCols.map(id => {
-                  const col = columns[id];
-                  const sortable = !!col.sortKey;
-                  const cls = ['col-draggable'];
-                  if (sortable) cls.push('sortable');
-                  if (dragCol === id) cls.push('dragging');
-                  if (dragOverCol === id && dragCol && dragCol !== id) cls.push('drag-over');
-                  return (
-                    <th key={id} className={cls.join(' ')} draggable title="Sleep om te verplaatsen"
-                      style={{ top: theadTop }}
-                      onDragStart={e => onDragStart(e, id)} onDragOver={e => onDragOver(e, id)}
-                      onDrop={e => onDrop(e, id)} onDragEnd={onDragEnd}
-                      onClick={sortable ? () => sort(col.sortKey!) : undefined}>
-                      {col.label}{sortable ? srt(col.sortKey!) : null}
-                    </th>
-                  );
-                })}
-                <th style={{ top: theadTop }}></th>
-              </tr>
-              {filtersOpen && (
-                <tr>
-                  <th style={{ ...fixedW(STICKY_META_W), padding: '2px 4px', textAlign: 'center', position: 'sticky', left: 0, top: theadRow2Top, zIndex: 6, background: stickyGrey }}>
-                    {activeFilters > 0 && (
-                      <button className="btn" title="Filters wissen" style={{ fontSize: 10, padding: '1px 5px' }} onClick={() => setColFilters({})}>✕</button>
-                    )}
-                  </th>
-                  <th style={{ ...fixedW(STICKY_NUM_W), position: 'sticky', left: STICKY_META_W, top: theadRow2Top, zIndex: 6, background: stickyGrey }}></th>
-                  {wp === 0 && (
-                    <th style={{ ...fixedW(STICKY_PROJECT_W), padding: '2px 6px', position: 'sticky', left: stickyProjectLeft, top: theadRow2Top, zIndex: 6, background: 'var(--surface2)' }}>
-                      <input className="inline-edit" style={{ width: '100%', minWidth: 64, fontWeight: 400 }} placeholder="filter…"
-                        value={colFilters['project'] ?? ''} onChange={e => setColFilters(f => ({ ...f, project: e.target.value }))} />
-                    </th>
-                  )}
-                  <th style={{ ...fixedW(STICKY_BORING_W), padding: '2px 6px', position: 'sticky', left: stickyBoringLeft, top: theadRow2Top, zIndex: 6, background: 'var(--surface2)', boxShadow: '2px 0 4px -2px rgba(0,0,0,0.10)' }}>
-                    <input className="inline-edit" style={{ width: '100%', minWidth: 64, fontWeight: 400 }} placeholder="filter…"
-                      value={colFilters['boring_nr'] ?? ''} onChange={e => setColFilters(f => ({ ...f, boring_nr: e.target.value }))} />
-                  </th>
-                  {visibleCols.map(id => (
-                    <th key={id} style={{ padding: '2px 6px', top: theadRow2Top }}>
-                      <input className="inline-edit" style={{ width: '100%', minWidth: 64, fontWeight: 400 }} placeholder="filter…"
-                        value={colFilters[id] ?? ''} onChange={e => setColFilters(f => ({ ...f, [id]: e.target.value }))} />
-                    </th>
-                  ))}
-                  <th style={{ top: theadRow2Top }}></th>
-                </tr>
-              )}
-            </thead>
             <tbody>
               {rows.length === 0 ? (
                 <tr><td colSpan={visibleCols.length + 4 + (wp === 0 ? 1 : 0)}><div className="empty-state"><strong>{intakeMode ? 'Geen boringen in de intake' : 'Geen boringen gevonden'}</strong>{intakeMode ? 'Alles is doorgezet naar het project.' : 'Pas de filters aan.'}</div></td></tr>
