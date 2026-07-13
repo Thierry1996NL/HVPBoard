@@ -457,7 +457,7 @@ export default function LemmerPage() {
 
   const stats = useMemo(() => {
     const proj = data.filter(d => wp === 0 || d.werkpakket_id === wp);
-    const a = proj.filter(d => !d.vervallen);
+    const a = proj.filter(d => !d.vervallen && !d.gereed);
     let groen = 0, geel = 0, rood = 0;
     for (const d of a) { const h = boringHealth(d); if (h === 'rood') rood++; else if (h === 'geel') geel++; else groen++; }
     return { totaal: proj.length, groen, geel, rood, vervallen: proj.filter(d => d.vervallen).length, gereed: proj.filter(d => d.gereed && !d.vervallen).length };
