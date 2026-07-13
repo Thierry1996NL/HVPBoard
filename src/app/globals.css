@@ -349,7 +349,7 @@ body {
   overflow: hidden;
   box-shadow: var(--sh-sm);
 }
-.tbl-scroll { overflow-x: auto; }
+.tbl-scroll { overflow-x: auto; overflow-y: visible; }
 
 table { width: 100%; border-collapse: collapse; font-size: 12px; }
 thead th {
