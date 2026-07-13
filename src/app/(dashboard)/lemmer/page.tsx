@@ -786,7 +786,7 @@ export default function LemmerPage() {
           <button key={c.id} type="button"
             className={`stat-card stat-btn ${c.cls ?? ''}${kpi === c.id ? ' active' : ''}`}
             style={(c.id === 'vervallen' || c.id === 'gereed') && kpi !== c.id ? { opacity: 0.55 } : undefined}
-            onClick={() => { setKpi(c.id); if (c.id === 'vervallen' || c.id === 'gereed') setToonAfgerond(true); }}>
+            onClick={() => { setKpi(c.id); setToonAfgerond(c.id === 'vervallen' || c.id === 'gereed'); }}>
             <span className="stat-num">{c.num}</span><span className="stat-label">{c.label}</span>
           </button>
         ))}
@@ -803,11 +803,6 @@ export default function LemmerPage() {
         </button>
         <button className="btn" onClick={handleOpslaan} disabled={opslaan} style={{ fontSize: 11 }} title="Synchroniseren met de database (wijzigingen worden al automatisch opgeslagen)">
           {opslaan ? '… Opslaan' : '💾 Opslaan'}
-        </button>
-        <button className="btn" onClick={() => setToonAfgerond(v => !v)}
-          style={{ fontSize: 11, ...(toonAfgerond ? { borderColor: 'var(--accent)', color: 'var(--accent)' } : {}) }}
-          title="Standaard worden gereed en vervallen boringen verborgen voor overzicht">
-          {toonAfgerond ? '✕ Verberg gereed & vervallen' : 'Toon gereed & vervallen'}
         </button>
         <div style={{ flex: 1 }} />
         <div style={{ position: 'relative' }}>
