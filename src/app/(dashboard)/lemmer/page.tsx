@@ -249,22 +249,22 @@ type ColId =
 const DEFAULT_COL_ORDER: ColId[] = [
   'boring_nr', 'werkpakket_nr', 'locatie', 'lengte_m', 'type_boring', 'klasse', 'aannemer',
   'prioritering', 'oplevering_toolgate', 'projectfase', 'engineeringsfase',
-  'startdatum', 'fase0', 'faseG', 'fase1', 'fase2', 'einddatum', 'eind_weken', 'actieve_stap', 'actieve_eigenaar', 'opmerking_extra',
+  'startdatum', 'fase0', 'faseG', 'fase1', 'fase2', 'einddatum', 'planning_apds', 'eind_weken', 'actieve_stap', 'actieve_eigenaar', 'opmerking_extra',
   'aanlevering_compleet', 'ter_controle_uitvoering', 'retour_uitvoering', 'schouw_uitgevoerd',
-  'opmerkingen_uitvoering', 'planning_apds', 'ontwerp_pct', 'tek_pct', 'status_werkterrein',
+  'opmerkingen_uitvoering', 'ontwerp_pct', 'tek_pct', 'status_werkterrein',
   'status_berekening', 'sondering_nr', 'sondering_aangevraagd', 'sondering_retour',
   'bundel_configuratie', 'raakvlak', 'case_nr', 'gereed',
 ];
 /* Standaard verborgen kolommen (compacte weergave) — toonbaar via de kolomkiezer of de knop Uitklappen. */
 const DEFAULT_HIDDEN: ColId[] = [
-  'oplevering_toolgate', 'projectfase', 'engineeringsfase', 'planning_apds',
+  'oplevering_toolgate', 'projectfase', 'engineeringsfase',
   'aanlevering_compleet', 'ter_controle_uitvoering', 'retour_uitvoering', 'schouw_uitgevoerd',
   'opmerkingen_uitvoering', 'ontwerp_pct', 'tek_pct', 'status_werkterrein',
   'status_berekening', 'sondering_nr', 'sondering_aangevraagd', 'sondering_retour',
   'raakvlak', 'case_nr', 'bundel_configuratie',
 ];
-const COL_ORDER_KEY = 'hvp_lemmer_colorder_v10';
-const HIDDEN_KEY = 'hvp_lemmer_hidden_v6';
+const COL_ORDER_KEY = 'hvp_lemmer_colorder_v11';
+const HIDDEN_KEY = 'hvp_lemmer_hidden_v7';
 /* Koppeling fase-kolom → index in PROCES_FASEN */
 const FASE_COL: Record<string, number> = { fase0: 0, faseG: 1, fase1: 2, fase2: 3 };
 /* Berekende kolommen zonder eigen databaseveld — niet filterbaar via de header. */
