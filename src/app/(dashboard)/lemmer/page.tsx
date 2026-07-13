@@ -331,6 +331,7 @@ export default function LemmerPage() {
   const [dragOverCol, setDragOverCol] = useState<ColId | null>(null);
   const [hidden, setHidden]           = useState<Set<ColId>>(new Set(DEFAULT_HIDDEN));
   const [colPickerOpen, setColPickerOpen] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   /* Sticky bovenblok (titel/tabs/kaarten/werkbalk) — hoogte gemeten zodat de
      tabelkop er precies op aansluit tijdens verticaal scrollen. */
   const HDR_H = 48; // moet gelijk blijven aan --hdr-h in globals.css
@@ -350,7 +351,6 @@ export default function LemmerPage() {
     window.addEventListener('resize', measure);
     return () => { ro.disconnect(); window.removeEventListener('resize', measure); };
   }, [wp, filtersOpen, kpi]);
-  const [filtersOpen, setFiltersOpen] = useState(false);
   const [colFilters, setColFilters]   = useState<Partial<Record<ColId, string>>>({});
   const activeFilters = Object.values(colFilters).filter(v => (v ?? '').trim()).length;
 
