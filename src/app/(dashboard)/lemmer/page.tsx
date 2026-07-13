@@ -372,9 +372,13 @@ export default function LemmerPage() {
   const STICKY_META_W = 64;   // breedte pijltje/stappen-kolom
   const STICKY_NUM_W = 40;    // breedte #-kolom
   const STICKY_PROJECT_W = 120;
+  const STICKY_BORING_W = 92;
+  /* Dwingt een exacte kolombreedte af (anders mag de browser 'm oprekken op inhoud,
+     waardoor sticky left-offsets niet meer kloppen en er een kiertje ontstaat). */
+  const fixedW = (w: number): React.CSSProperties => ({ width: w, minWidth: w, maxWidth: w, overflow: 'hidden' });
   const stickyProjectLeft = STICKY_META_W + STICKY_NUM_W;
   const stickyBoringLeft = stickyProjectLeft + (wp === 0 ? STICKY_PROJECT_W : 0);
-  const stickyGrey = 'var(--surface-2, #F1F3F5)';
+  const stickyGrey = 'var(--surface2)';
 
   const onDragStart = (e: React.DragEvent, id: ColId) => { setDragCol(id); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', id); };
   const onDragOver  = (e: React.DragEvent, id: ColId) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; if (id !== dragOverCol) setDragOverCol(id); };
@@ -839,14 +843,22 @@ export default function LemmerPage() {
       <div className="table-wrap">
         <div className="tbl-scroll">
           <table className="data-table">
+            <colgroup>
+              <col style={{ width: STICKY_META_W }} />
+              <col style={{ width: STICKY_NUM_W }} />
+              {wp === 0 && <col style={{ width: STICKY_PROJECT_W }} />}
+              <col style={{ width: STICKY_BORING_W }} />
+              {visibleCols.map(id => <col key={id} />)}
+              <col />
+            </colgroup>
             <thead>
               <tr>
-                <th style={{ width: STICKY_META_W, position: 'sticky', left: 0, zIndex: 6, background: stickyGrey }}></th>
-                <th style={{ width: STICKY_NUM_W, textAlign: 'center', color: 'var(--text-4)', fontWeight: 600, position: 'sticky', left: STICKY_META_W, zIndex: 6, background: stickyGrey }} title="Volgnummer">#</th>
+                <th style={{ ...fixedW(STICKY_META_W), position: 'sticky', left: 0, zIndex: 6, background: stickyGrey }}></th>
+                <th style={{ ...fixedW(STICKY_NUM_W), textAlign: 'center', color: 'var(--text-4)', fontWeight: 600, position: 'sticky', left: STICKY_META_W, zIndex: 6, background: stickyGrey }} title="Volgnummer">#</th>
                 {wp === 0 && (
-                  <th style={{ width: STICKY_PROJECT_W, position: 'sticky', left: stickyProjectLeft, zIndex: 6, background: 'var(--surface)' }}>Project</th>
+                  <th style={{ ...fixedW(STICKY_PROJECT_W), position: 'sticky', left: stickyProjectLeft, zIndex: 6, background: 'var(--surface)' }}>Project</th>
                 )}
-                <th style={{ position: 'sticky', left: stickyBoringLeft, zIndex: 6, background: 'var(--surface)' }}
+                <th style={{ ...fixedW(STICKY_BORING_W), position: 'sticky', left: stickyBoringLeft, zIndex: 6, background: 'var(--surface)', boxShadow: '2px 0 4px -2px rgba(0,0,0,0.10)' }}
                   className="sortable" onClick={() => sort('boring_nr')}>
                   Boor nr{srt('boring_nr')}
                 </th>
@@ -870,19 +882,19 @@ export default function LemmerPage() {
               </tr>
               {filtersOpen && (
                 <tr>
-                  <th style={{ padding: '2px 4px', textAlign: 'center', position: 'sticky', left: 0, zIndex: 6, background: stickyGrey }}>
+                  <th style={{ ...fixedW(STICKY_META_W), padding: '2px 4px', textAlign: 'center', position: 'sticky', left: 0, zIndex: 6, background: stickyGrey }}>
                     {activeFilters > 0 && (
                       <button className="btn" title="Filters wissen" style={{ fontSize: 10, padding: '1px 5px' }} onClick={() => setColFilters({})}>✕</button>
                     )}
                   </th>
-                  <th style={{ position: 'sticky', left: STICKY_META_W, zIndex: 6, background: stickyGrey }}></th>
+                  <th style={{ ...fixedW(STICKY_NUM_W), position: 'sticky', left: STICKY_META_W, zIndex: 6, background: stickyGrey }}></th>
                   {wp === 0 && (
-                    <th style={{ padding: '2px 6px', position: 'sticky', left: stickyProjectLeft, zIndex: 6, background: 'var(--surface)' }}>
+                    <th style={{ ...fixedW(STICKY_PROJECT_W), padding: '2px 6px', position: 'sticky', left: stickyProjectLeft, zIndex: 6, background: 'var(--surface)' }}>
                       <input className="inline-edit" style={{ width: '100%', minWidth: 64, fontWeight: 400 }} placeholder="filter…"
                         value={colFilters['project'] ?? ''} onChange={e => setColFilters(f => ({ ...f, project: e.target.value }))} />
                     </th>
                   )}
-                  <th style={{ padding: '2px 6px', position: 'sticky', left: stickyBoringLeft, zIndex: 6, background: 'var(--surface)' }}>
+                  <th style={{ ...fixedW(STICKY_BORING_W), padding: '2px 6px', position: 'sticky', left: stickyBoringLeft, zIndex: 6, background: 'var(--surface)', boxShadow: '2px 0 4px -2px rgba(0,0,0,0.10)' }}>
                     <input className="inline-edit" style={{ width: '100%', minWidth: 64, fontWeight: 400 }} placeholder="filter…"
                       value={colFilters['boring_nr'] ?? ''} onChange={e => setColFilters(f => ({ ...f, boring_nr: e.target.value }))} />
                   </th>
@@ -911,20 +923,20 @@ export default function LemmerPage() {
                       opacity: d.vervallen ? 0.45 : d.gereed ? 0.6 : 1,
                       background: rowBg === 'var(--surface)' ? undefined : rowBg,
                     }}>
-                      <td style={{ textAlign: 'center', cursor: 'pointer', whiteSpace: 'nowrap', position: 'sticky', left: 0, zIndex: 3, background: stickyGrey }}
+                      <td style={{ ...fixedW(STICKY_META_W), textAlign: 'center', cursor: 'pointer', whiteSpace: 'nowrap', position: 'sticky', left: 0, zIndex: 3, background: stickyGrey }}
                         title={isOpen ? 'Stappen inklappen' : 'Stappen uitklappen'}
                         onClick={() => toggleExpand(d.id)}>
                         <span className={`lem-chev${isOpen ? ' open' : ''}`} style={{ fontSize: 10 }}>▶</span>
                         {(() => { const g = stappenGereed(d); return <span style={{ marginLeft: 5, fontSize: 9, fontWeight: 700, color: g > 0 ? 'var(--g-fg)' : 'var(--text-4)' }}>{g}/{ALLE_STAPPEN.length}</span>; })()}
                       </td>
-                      <td style={{ textAlign: 'center', fontSize: 11, color: 'var(--text-4)', fontVariantNumeric: 'tabular-nums', position: 'sticky', left: STICKY_META_W, zIndex: 3, background: stickyGrey }}>{idx + 1}</td>
+                      <td style={{ ...fixedW(STICKY_NUM_W), textAlign: 'center', fontSize: 11, color: 'var(--text-4)', fontVariantNumeric: 'tabular-nums', position: 'sticky', left: STICKY_META_W, zIndex: 3, background: stickyGrey }}>{idx + 1}</td>
                       {wp === 0 && (
-                        <td style={{ position: 'sticky', left: stickyProjectLeft, zIndex: 3, background: rowBg, whiteSpace: 'nowrap', color: 'var(--text-2)', fontWeight: 600 }}>
+                        <td style={{ ...fixedW(STICKY_PROJECT_W), position: 'sticky', left: stickyProjectLeft, zIndex: 3, background: rowBg, whiteSpace: 'nowrap', textOverflow: 'ellipsis', color: 'var(--text-2)', fontWeight: 600 }}>
                           {PROJECTEN.find(p => p.wp === d.werkpakket_id)?.naam ?? '—'}
                         </td>
                       )}
                       <InlineCell type="text" value={d.boring_nr}
-                        tdStyle={{ fontWeight: 600, position: 'sticky', left: stickyBoringLeft, zIndex: 3, background: rowBg }}
+                        tdStyle={{ ...fixedW(STICKY_BORING_W), fontWeight: 600, position: 'sticky', left: stickyBoringLeft, zIndex: 3, background: rowBg, boxShadow: '2px 0 4px -2px rgba(0,0,0,0.10)' }}
                         display={<span>{d.boring_nr || '—'}</span>}
                         onSave={v => saveField(d.id, { boring_nr: (v ?? '') as string })} />
                       {visibleCols.map(id => <Fragment key={id}>{columns[id].cell(d)}</Fragment>)}
