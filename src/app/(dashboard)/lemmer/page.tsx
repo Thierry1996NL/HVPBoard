@@ -249,7 +249,7 @@ type ColId =
 const DEFAULT_COL_ORDER: ColId[] = [
   'boring_nr', 'werkpakket_nr', 'locatie', 'lengte_m', 'type_boring', 'klasse', 'aannemer',
   'prioritering', 'oplevering_toolgate', 'projectfase', 'engineeringsfase',
-  'startdatum', 'fase0', 'faseG', 'fase1', 'fase2', 'einddatum', 'planning_apds', 'eind_weken', 'actieve_stap', 'actieve_eigenaar', 'opmerking_extra',
+  'startdatum', 'fase0', 'faseG', 'fase1', 'fase2', 'eind_weken', 'einddatum', 'planning_apds', 'actieve_stap', 'actieve_eigenaar', 'opmerking_extra',
   'aanlevering_compleet', 'ter_controle_uitvoering', 'retour_uitvoering', 'schouw_uitgevoerd',
   'opmerkingen_uitvoering', 'ontwerp_pct', 'tek_pct', 'status_werkterrein',
   'status_berekening', 'sondering_nr', 'sondering_aangevraagd', 'sondering_retour',
@@ -263,7 +263,7 @@ const DEFAULT_HIDDEN: ColId[] = [
   'status_berekening', 'sondering_nr', 'sondering_aangevraagd', 'sondering_retour',
   'raakvlak', 'case_nr', 'bundel_configuratie',
 ];
-const COL_ORDER_KEY = 'hvp_lemmer_colorder_v11';
+const COL_ORDER_KEY = 'hvp_lemmer_colorder_v12';
 const HIDDEN_KEY = 'hvp_lemmer_hidden_v7';
 /* Koppeling fase-kolom → index in PROCES_FASEN */
 const FASE_COL: Record<string, number> = { fase0: 0, faseG: 1, fase1: 2, fase2: 3 };
@@ -856,9 +856,9 @@ export default function LemmerPage() {
                 <th style={{ ...fixedW(STICKY_META_W), position: 'sticky', left: 0, zIndex: 6, background: stickyGrey }}></th>
                 <th style={{ ...fixedW(STICKY_NUM_W), textAlign: 'center', color: 'var(--text-4)', fontWeight: 600, position: 'sticky', left: STICKY_META_W, zIndex: 6, background: stickyGrey }} title="Volgnummer">#</th>
                 {wp === 0 && (
-                  <th style={{ ...fixedW(STICKY_PROJECT_W), position: 'sticky', left: stickyProjectLeft, zIndex: 6, background: 'var(--surface)' }}>Project</th>
+                  <th style={{ ...fixedW(STICKY_PROJECT_W), position: 'sticky', left: stickyProjectLeft, zIndex: 6, background: 'var(--surface2)' }}>Project</th>
                 )}
-                <th style={{ ...fixedW(STICKY_BORING_W), position: 'sticky', left: stickyBoringLeft, zIndex: 6, background: 'var(--surface)', boxShadow: '2px 0 4px -2px rgba(0,0,0,0.10)' }}
+                <th style={{ ...fixedW(STICKY_BORING_W), position: 'sticky', left: stickyBoringLeft, zIndex: 6, background: 'var(--surface2)', boxShadow: '2px 0 4px -2px rgba(0,0,0,0.10)' }}
                   className="sortable" onClick={() => sort('boring_nr')}>
                   Boor nr{srt('boring_nr')}
                 </th>
@@ -889,12 +889,12 @@ export default function LemmerPage() {
                   </th>
                   <th style={{ ...fixedW(STICKY_NUM_W), position: 'sticky', left: STICKY_META_W, zIndex: 6, background: stickyGrey }}></th>
                   {wp === 0 && (
-                    <th style={{ ...fixedW(STICKY_PROJECT_W), padding: '2px 6px', position: 'sticky', left: stickyProjectLeft, zIndex: 6, background: 'var(--surface)' }}>
+                    <th style={{ ...fixedW(STICKY_PROJECT_W), padding: '2px 6px', position: 'sticky', left: stickyProjectLeft, zIndex: 6, background: 'var(--surface2)' }}>
                       <input className="inline-edit" style={{ width: '100%', minWidth: 64, fontWeight: 400 }} placeholder="filter…"
                         value={colFilters['project'] ?? ''} onChange={e => setColFilters(f => ({ ...f, project: e.target.value }))} />
                     </th>
                   )}
-                  <th style={{ ...fixedW(STICKY_BORING_W), padding: '2px 6px', position: 'sticky', left: stickyBoringLeft, zIndex: 6, background: 'var(--surface)', boxShadow: '2px 0 4px -2px rgba(0,0,0,0.10)' }}>
+                  <th style={{ ...fixedW(STICKY_BORING_W), padding: '2px 6px', position: 'sticky', left: stickyBoringLeft, zIndex: 6, background: 'var(--surface2)', boxShadow: '2px 0 4px -2px rgba(0,0,0,0.10)' }}>
                     <input className="inline-edit" style={{ width: '100%', minWidth: 64, fontWeight: 400 }} placeholder="filter…"
                       value={colFilters['boring_nr'] ?? ''} onChange={e => setColFilters(f => ({ ...f, boring_nr: e.target.value }))} />
                   </th>
