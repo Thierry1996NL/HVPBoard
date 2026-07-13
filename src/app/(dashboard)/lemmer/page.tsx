@@ -460,7 +460,7 @@ export default function LemmerPage() {
     const a = proj.filter(d => !d.vervallen);
     let groen = 0, geel = 0, rood = 0;
     for (const d of a) { const h = boringHealth(d); if (h === 'rood') rood++; else if (h === 'geel') geel++; else groen++; }
-    return { totaal: a.length, groen, geel, rood, vervallen: proj.filter(d => d.vervallen).length, gereed: proj.filter(d => d.gereed && !d.vervallen).length };
+    return { totaal: proj.length, groen, geel, rood, vervallen: proj.filter(d => d.vervallen).length, gereed: proj.filter(d => d.gereed && !d.vervallen).length };
   }, [data, wp]);
 
   const rows = useMemo(() => {
@@ -470,9 +470,10 @@ export default function LemmerPage() {
       else { if (d.intake_compleet !== true) return false; }
       if (kpi === 'vervallen') { if (!d.vervallen) return false; }
       else if (kpi === 'gereed') { if (!d.gereed || d.vervallen) return false; }
+      else if (kpi === 'actief') { /* toont alles, geen uitsluiting */ }
       else {
         if (d.vervallen || d.gereed) return false;
-        if (kpi !== 'actief' && boringHealth(d) !== kpi) return false;
+        if (boringHealth(d) !== kpi) return false;
       }
       if (search) {
         const q = search.toLowerCase();
