@@ -319,7 +319,6 @@ export default function LemmerPage() {
   const [intakeMode, setIntakeMode] = useState(false);
   const [intakeKeuze, setIntakeKeuze] = useState<Record<string, string>>({});
   const [kpi, setKpi]         = useState<string>('actief');
-  const [toonAfgerond, setToonAfgerond] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const toggleExpand = (id: string) => setExpanded(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const [expandedFases, setExpandedFases] = useState<Set<string>>(new Set());
@@ -469,10 +468,12 @@ export default function LemmerPage() {
       if (wp !== 0 && d.werkpakket_id !== wp) return false;
       if (intakeMode) { if (d.intake_compleet === true) return false; }
       else { if (d.intake_compleet !== true) return false; }
-      if (!toonAfgerond) { if (d.gereed || d.vervallen) return false; }
-      else if (kpi === 'vervallen') { if (!d.vervallen) return false; }
+      if (kpi === 'vervallen') { if (!d.vervallen) return false; }
       else if (kpi === 'gereed') { if (!d.gereed || d.vervallen) return false; }
-      else { if (d.vervallen) return false; if (kpi !== 'actief' && boringHealth(d) !== kpi) return false; }
+      else {
+        if (d.vervallen || d.gereed) return false;
+        if (kpi !== 'actief' && boringHealth(d) !== kpi) return false;
+      }
       if (search) {
         const q = search.toLowerCase();
         return [d.boring_nr, d.locatie, d.werkpakket_nr, d.aannemer, d.type_boring, d.prioritering].some(v => (v ?? '').toLowerCase().includes(q));
@@ -487,7 +488,7 @@ export default function LemmerPage() {
     if (fEntries.length) r = r.filter(d => fEntries.every(([id, v]) =>
       colFilterValue(d, id as ColId).toLowerCase().includes((v as string).trim().toLowerCase())));
     return r;
-  }, [data, search, kpi, sortCol, sortDir, colFilters, wp, intakeMode, toonAfgerond]);
+  }, [data, search, kpi, sortCol, sortDir, colFilters, wp, intakeMode]);
 
   /* Aantal boringen dat nog in de intake staat (huidig project of alle). */
   const intakeCount = useMemo(
@@ -786,7 +787,7 @@ export default function LemmerPage() {
           <button key={c.id} type="button"
             className={`stat-card stat-btn ${c.cls ?? ''}${kpi === c.id ? ' active' : ''}`}
             style={(c.id === 'vervallen' || c.id === 'gereed') && kpi !== c.id ? { opacity: 0.55 } : undefined}
-            onClick={() => { setKpi(c.id); setToonAfgerond(c.id === 'vervallen' || c.id === 'gereed'); }}>
+            onClick={() => setKpi(c.id)}>
             <span className="stat-num">{c.num}</span><span className="stat-label">{c.label}</span>
           </button>
         ))}
