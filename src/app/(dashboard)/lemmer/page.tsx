@@ -337,7 +337,15 @@ export default function LemmerPage() {
      zichtbaar zonder fragiele pixel-berekeningen voor verticale positionering. */
   const headerScrollRef = useRef<HTMLDivElement>(null);
   const bodyScrollRef = useRef<HTMLDivElement>(null);
-  const syncScrollFromBody = () => { if (headerScrollRef.current && bodyScrollRef.current) headerScrollRef.current.scrollLeft = bodyScrollRef.current.scrollLeft; };
+  const syncingRef = useRef<'header' | 'body' | null>(null);
+  const syncScrollFromBody = () => {
+    if (syncingRef.current === 'header') { syncingRef.current = null; return; }
+    if (headerScrollRef.current && bodyScrollRef.current) { syncingRef.current = 'body'; headerScrollRef.current.scrollLeft = bodyScrollRef.current.scrollLeft; }
+  };
+  const syncScrollFromHeader = () => {
+    if (syncingRef.current === 'body') { syncingRef.current = null; return; }
+    if (headerScrollRef.current && bodyScrollRef.current) { syncingRef.current = 'header'; bodyScrollRef.current.scrollLeft = headerScrollRef.current.scrollLeft; }
+  };
   const [colFilters, setColFilters]   = useState<Partial<Record<ColId, string>>>({});
   const activeFilters = Object.values(colFilters).filter(v => (v ?? '').trim()).length;
 
@@ -771,6 +779,8 @@ export default function LemmerPage() {
         .lem-colpicker-row { display: flex; align-items: center; gap: 9px; padding: 5px 8px; border-radius: var(--r); font-size: var(--fz-md); color: var(--text-2); cursor: pointer; transition: background .1s ease; }
         .lem-colpicker-row:hover { background: var(--surface3); }
         .lem-colpicker-row input { accent-color: var(--accent); }
+        .lem-header-scroll { scrollbar-width: none; -ms-overflow-style: none; }
+        .lem-header-scroll::-webkit-scrollbar { display: none; height: 0; }
         .lem-person-row:hover { background: var(--n-mid); }
         .stat-card.stat-G .stat-num { color: var(--g-fg); }
         .stat-card.stat-A .stat-num { color: var(--r-fg); }
@@ -853,7 +863,7 @@ export default function LemmerPage() {
       {/* Vaste kop-tabel — leeft ín het sticky bovenblok, dus geen aparte verticale
           sticky-berekening meer nodig. Horizontaal scrollen wordt gesynchroniseerd
           met de databcody-tabel eronder. */}
-      <div ref={headerScrollRef} style={{ overflowX: 'hidden' }}>
+      <div ref={headerScrollRef} onScroll={syncScrollFromHeader} className="lem-header-scroll" style={{ overflowX: 'auto' }}>
         <table className="data-table" style={{ marginBottom: 0 }}>
           <colgroup>
             <col style={{ width: STICKY_META_W }} />
@@ -883,6 +893,7 @@ export default function LemmerPage() {
                 if (dragOverCol === id && dragCol && dragCol !== id) cls.push('drag-over');
                 return (
                   <th key={id} className={cls.join(' ')} draggable title="Sleep om te verplaatsen"
+                    style={{ position: 'static' }}
                     onDragStart={e => onDragStart(e, id)} onDragOver={e => onDragOver(e, id)}
                     onDrop={e => onDrop(e, id)} onDragEnd={onDragEnd}
                     onClick={sortable ? () => sort(col.sortKey!) : undefined}>
@@ -890,7 +901,7 @@ export default function LemmerPage() {
                   </th>
                 );
               })}
-              <th></th>
+              <th style={{ position: 'static' }}></th>
             </tr>
             {filtersOpen && (
               <tr>
@@ -911,12 +922,12 @@ export default function LemmerPage() {
                     value={colFilters['boring_nr'] ?? ''} onChange={e => setColFilters(f => ({ ...f, boring_nr: e.target.value }))} />
                 </th>
                 {visibleCols.map(id => (
-                  <th key={id} style={{ padding: '2px 6px' }}>
+                  <th key={id} style={{ padding: '2px 6px', position: 'static' }}>
                     <input className="inline-edit" style={{ width: '100%', minWidth: 64, fontWeight: 400 }} placeholder="filter…"
                       value={colFilters[id] ?? ''} onChange={e => setColFilters(f => ({ ...f, [id]: e.target.value }))} />
                   </th>
                 ))}
-                <th></th>
+                <th style={{ position: 'static' }}></th>
               </tr>
             )}
           </thead>
