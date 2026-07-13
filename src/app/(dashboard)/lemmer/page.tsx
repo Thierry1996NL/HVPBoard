@@ -920,7 +920,7 @@ export default function LemmerPage() {
                       <td style={{ textAlign: 'center', fontSize: 11, color: 'var(--text-4)', fontVariantNumeric: 'tabular-nums', position: 'sticky', left: STICKY_META_W, zIndex: 3, background: stickyGrey }}>{idx + 1}</td>
                       {wp === 0 && (
                         <td style={{ position: 'sticky', left: stickyProjectLeft, zIndex: 3, background: rowBg, whiteSpace: 'nowrap', color: 'var(--text-2)', fontWeight: 600 }}>
-                          {projecten.find(p => p.wp === d.werkpakket_id)?.naam ?? '—'}
+                          {PROJECTEN.find(p => p.wp === d.werkpakket_id)?.naam ?? '—'}
                         </td>
                       )}
                       <InlineCell type="text" value={d.boring_nr}
