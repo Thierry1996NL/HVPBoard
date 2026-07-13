@@ -364,12 +364,17 @@ export default function LemmerPage() {
   const toggleHidden = (id: ColId) => setHidden(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const allVisible = hidden.size === 0;
   const toggleAlleKolommen = () => setHidden(allVisible ? new Set(DEFAULT_HIDDEN) : new Set());
-  const baseCols = columnOrder.filter(id => !hidden.has(id));
+  const baseCols = columnOrder.filter(id => !hidden.has(id) && id !== 'boring_nr');
   const visibleCols = ([
-    ...(wp === 0 ? ['project'] : []),
     ...(intakeMode ? ['voorstel'] : []),
     ...baseCols,
   ] as ColId[]);
+  const STICKY_META_W = 64;   // breedte pijltje/stappen-kolom
+  const STICKY_NUM_W = 40;    // breedte #-kolom
+  const STICKY_PROJECT_W = 120;
+  const stickyProjectLeft = STICKY_META_W + STICKY_NUM_W;
+  const stickyBoringLeft = stickyProjectLeft + (wp === 0 ? STICKY_PROJECT_W : 0);
+  const stickyGrey = 'var(--surface-2, #F1F3F5)';
 
   const onDragStart = (e: React.DragEvent, id: ColId) => { setDragCol(id); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', id); };
   const onDragOver  = (e: React.DragEvent, id: ColId) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; if (id !== dragOverCol) setDragOverCol(id); };
@@ -809,7 +814,7 @@ export default function LemmerPage() {
         <div style={{ flex: 1 }} />
         <div style={{ position: 'relative' }}>
           <button className="btn" onClick={() => setColPickerOpen(o => !o)} style={{ fontSize: 11 }} title="Kies welke kolommen zichtbaar zijn">
-            ▦ Kolommen ({visibleCols.length}/{columnOrder.length}) ▾
+            ▦ Kolommen ({visibleCols.length}/{columnOrder.length - 1}) ▾
           </button>
           {colPickerOpen && (
             <>
@@ -819,7 +824,7 @@ export default function LemmerPage() {
                   <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--text-4)' }}>Kolommen tonen</span>
                   <button className="btn" style={{ fontSize: 10, padding: '2px 6px' }} onClick={() => { setColumnOrder(DEFAULT_COL_ORDER); setHidden(new Set(DEFAULT_HIDDEN)); }} title="Volgorde + zichtbaarheid terugzetten">↺ Standaard</button>
                 </div>
-                {columnOrder.map(id => (
+                {columnOrder.filter(id => id !== 'boring_nr').map(id => (
                   <label key={id} className="lem-colpicker-row">
                     <input type="checkbox" checked={!hidden.has(id)} onChange={() => toggleHidden(id)} />
                     {columns[id].label}
@@ -836,8 +841,15 @@ export default function LemmerPage() {
           <table className="data-table">
             <thead>
               <tr>
-                <th style={{ width: 30 }}></th>
-                <th style={{ width: 36, textAlign: 'center', color: 'var(--text-4)', fontWeight: 600 }} title="Volgnummer">#</th>
+                <th style={{ width: STICKY_META_W, position: 'sticky', left: 0, zIndex: 6, background: stickyGrey }}></th>
+                <th style={{ width: STICKY_NUM_W, textAlign: 'center', color: 'var(--text-4)', fontWeight: 600, position: 'sticky', left: STICKY_META_W, zIndex: 6, background: stickyGrey }} title="Volgnummer">#</th>
+                {wp === 0 && (
+                  <th style={{ width: STICKY_PROJECT_W, position: 'sticky', left: stickyProjectLeft, zIndex: 6, background: 'var(--surface)' }}>Project</th>
+                )}
+                <th style={{ position: 'sticky', left: stickyBoringLeft, zIndex: 6, background: 'var(--surface)' }}
+                  className="sortable" onClick={() => sort('boring_nr')}>
+                  Boor nr{srt('boring_nr')}
+                </th>
                 {visibleCols.map(id => {
                   const col = columns[id];
                   const sortable = !!col.sortKey;
@@ -858,12 +870,22 @@ export default function LemmerPage() {
               </tr>
               {filtersOpen && (
                 <tr>
-                  <th style={{ padding: '2px 4px', textAlign: 'center' }}>
+                  <th style={{ padding: '2px 4px', textAlign: 'center', position: 'sticky', left: 0, zIndex: 6, background: stickyGrey }}>
                     {activeFilters > 0 && (
                       <button className="btn" title="Filters wissen" style={{ fontSize: 10, padding: '1px 5px' }} onClick={() => setColFilters({})}>✕</button>
                     )}
                   </th>
-                  <th></th>
+                  <th style={{ position: 'sticky', left: STICKY_META_W, zIndex: 6, background: stickyGrey }}></th>
+                  {wp === 0 && (
+                    <th style={{ padding: '2px 6px', position: 'sticky', left: stickyProjectLeft, zIndex: 6, background: 'var(--surface)' }}>
+                      <input className="inline-edit" style={{ width: '100%', minWidth: 64, fontWeight: 400 }} placeholder="filter…"
+                        value={colFilters['project'] ?? ''} onChange={e => setColFilters(f => ({ ...f, project: e.target.value }))} />
+                    </th>
+                  )}
+                  <th style={{ padding: '2px 6px', position: 'sticky', left: stickyBoringLeft, zIndex: 6, background: 'var(--surface)' }}>
+                    <input className="inline-edit" style={{ width: '100%', minWidth: 64, fontWeight: 400 }} placeholder="filter…"
+                      value={colFilters['boring_nr'] ?? ''} onChange={e => setColFilters(f => ({ ...f, boring_nr: e.target.value }))} />
+                  </th>
                   {visibleCols.map(id => (
                     <th key={id} style={{ padding: '2px 6px' }}>
                       <input className="inline-edit" style={{ width: '100%', minWidth: 64, fontWeight: 400 }} placeholder="filter…"
@@ -876,25 +898,35 @@ export default function LemmerPage() {
             </thead>
             <tbody>
               {rows.length === 0 ? (
-                <tr><td colSpan={visibleCols.length + 3}><div className="empty-state"><strong>{intakeMode ? 'Geen boringen in de intake' : 'Geen boringen gevonden'}</strong>{intakeMode ? 'Alles is doorgezet naar het project.' : 'Pas de filters aan.'}</div></td></tr>
+                <tr><td colSpan={visibleCols.length + 4 + (wp === 0 ? 1 : 0)}><div className="empty-state"><strong>{intakeMode ? 'Geen boringen in de intake' : 'Geen boringen gevonden'}</strong>{intakeMode ? 'Alles is doorgezet naar het project.' : 'Pas de filters aan.'}</div></td></tr>
               ) : rows.map((d, idx) => {
                 const isOpen = expanded.has(d.id);
+                const rowBg = d.gereed ? 'var(--n-bg)'
+                  : (!d.vervallen && boringHealth(d) === 'rood') ? 'var(--b-bg)'
+                  : (!d.vervallen && boringHealth(d) === 'geel') ? 'var(--r-bg)'
+                  : 'var(--surface)';
                 return (
                   <Fragment key={d.id}>
                     <tr style={{
                       opacity: d.vervallen ? 0.45 : d.gereed ? 0.6 : 1,
-                      background: d.gereed ? 'var(--n-bg)'
-                        : (!d.vervallen && boringHealth(d) === 'rood') ? 'var(--b-bg)'
-                        : (!d.vervallen && boringHealth(d) === 'geel') ? 'var(--r-bg)'
-                        : undefined,
+                      background: rowBg === 'var(--surface)' ? undefined : rowBg,
                     }}>
-                      <td style={{ textAlign: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                      <td style={{ textAlign: 'center', cursor: 'pointer', whiteSpace: 'nowrap', position: 'sticky', left: 0, zIndex: 3, background: stickyGrey }}
                         title={isOpen ? 'Stappen inklappen' : 'Stappen uitklappen'}
                         onClick={() => toggleExpand(d.id)}>
                         <span className={`lem-chev${isOpen ? ' open' : ''}`} style={{ fontSize: 10 }}>▶</span>
                         {(() => { const g = stappenGereed(d); return <span style={{ marginLeft: 5, fontSize: 9, fontWeight: 700, color: g > 0 ? 'var(--g-fg)' : 'var(--text-4)' }}>{g}/{ALLE_STAPPEN.length}</span>; })()}
                       </td>
-                      <td style={{ textAlign: 'center', fontSize: 11, color: 'var(--text-4)', fontVariantNumeric: 'tabular-nums' }}>{idx + 1}</td>
+                      <td style={{ textAlign: 'center', fontSize: 11, color: 'var(--text-4)', fontVariantNumeric: 'tabular-nums', position: 'sticky', left: STICKY_META_W, zIndex: 3, background: stickyGrey }}>{idx + 1}</td>
+                      {wp === 0 && (
+                        <td style={{ position: 'sticky', left: stickyProjectLeft, zIndex: 3, background: rowBg, whiteSpace: 'nowrap', color: 'var(--text-2)', fontWeight: 600 }}>
+                          {projecten.find(p => p.wp === d.werkpakket_id)?.naam ?? '—'}
+                        </td>
+                      )}
+                      <InlineCell type="text" value={d.boring_nr}
+                        tdStyle={{ fontWeight: 600, position: 'sticky', left: stickyBoringLeft, zIndex: 3, background: rowBg }}
+                        display={<span>{d.boring_nr || '—'}</span>}
+                        onSave={v => saveField(d.id, { boring_nr: (v ?? '') as string })} />
                       {visibleCols.map(id => <Fragment key={id}>{columns[id].cell(d)}</Fragment>)}
                       <td onClick={e => e.stopPropagation()}>
                         {intakeMode ? (
@@ -916,6 +948,8 @@ export default function LemmerPage() {
                     {isOpen && (
                       <tr>
                         <td></td>
+                        <td></td>
+                        {wp === 0 && <td></td>}
                         <td></td>
                         <td colSpan={visibleCols.length + 1} style={{ padding: '8px 10px 16px 8px', background: 'var(--bg)' }}>
                           <div className="lem-sub-panel">
