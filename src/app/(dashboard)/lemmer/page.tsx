@@ -837,6 +837,7 @@ export default function LemmerPage() {
             <thead>
               <tr>
                 <th style={{ width: 30 }}></th>
+                <th style={{ width: 36, textAlign: 'center', color: 'var(--text-4)', fontWeight: 600 }} title="Volgnummer">#</th>
                 {visibleCols.map(id => {
                   const col = columns[id];
                   const sortable = !!col.sortKey;
@@ -862,6 +863,7 @@ export default function LemmerPage() {
                       <button className="btn" title="Filters wissen" style={{ fontSize: 10, padding: '1px 5px' }} onClick={() => setColFilters({})}>✕</button>
                     )}
                   </th>
+                  <th></th>
                   {visibleCols.map(id => (
                     <th key={id} style={{ padding: '2px 6px' }}>
                       <input className="inline-edit" style={{ width: '100%', minWidth: 64, fontWeight: 400 }} placeholder="filter…"
@@ -874,8 +876,8 @@ export default function LemmerPage() {
             </thead>
             <tbody>
               {rows.length === 0 ? (
-                <tr><td colSpan={visibleCols.length + 2}><div className="empty-state"><strong>{intakeMode ? 'Geen boringen in de intake' : 'Geen boringen gevonden'}</strong>{intakeMode ? 'Alles is doorgezet naar het project.' : 'Pas de filters aan.'}</div></td></tr>
-              ) : rows.map(d => {
+                <tr><td colSpan={visibleCols.length + 3}><div className="empty-state"><strong>{intakeMode ? 'Geen boringen in de intake' : 'Geen boringen gevonden'}</strong>{intakeMode ? 'Alles is doorgezet naar het project.' : 'Pas de filters aan.'}</div></td></tr>
+              ) : rows.map((d, idx) => {
                 const isOpen = expanded.has(d.id);
                 return (
                   <Fragment key={d.id}>
@@ -892,6 +894,7 @@ export default function LemmerPage() {
                         <span className={`lem-chev${isOpen ? ' open' : ''}`} style={{ fontSize: 10 }}>▶</span>
                         {(() => { const g = stappenGereed(d); return <span style={{ marginLeft: 5, fontSize: 9, fontWeight: 700, color: g > 0 ? 'var(--g-fg)' : 'var(--text-4)' }}>{g}/{ALLE_STAPPEN.length}</span>; })()}
                       </td>
+                      <td style={{ textAlign: 'center', fontSize: 11, color: 'var(--text-4)', fontVariantNumeric: 'tabular-nums' }}>{idx + 1}</td>
                       {visibleCols.map(id => <Fragment key={id}>{columns[id].cell(d)}</Fragment>)}
                       <td onClick={e => e.stopPropagation()}>
                         {intakeMode ? (
@@ -912,6 +915,7 @@ export default function LemmerPage() {
                     </tr>
                     {isOpen && (
                       <tr>
+                        <td></td>
                         <td></td>
                         <td colSpan={visibleCols.length + 1} style={{ padding: '8px 10px 16px 8px', background: 'var(--bg)' }}>
                           <div className="lem-sub-panel">
