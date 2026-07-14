@@ -934,7 +934,7 @@ export default function LemmerPage() {
                 if (dragOverCol === id && dragCol && dragCol !== id) cls.push('drag-over');
                 return (
                   <th key={id} className={cls.join(' ')} draggable title="Sleep om te verplaatsen"
-                    style={{ position: 'static', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                    style={{ position: 'static', whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: 1.3, verticalAlign: 'bottom' }}
                     onDragStart={e => onDragStart(e, id)} onDragOver={e => onDragOver(e, id)}
                     onDrop={e => onDrop(e, id)} onDragEnd={onDragEnd}
                     onClick={sortable ? () => sort(col.sortKey!) : undefined}>
