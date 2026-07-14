@@ -353,6 +353,7 @@ export default function LemmerPage() {
   const [modal, setModal]   = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm]     = useState<Partial<LemmerBoring>>({});
+  const [remarkEdit, setRemarkEdit] = useState<{ id: string; value: string } | null>(null);
 
   useEffect(() => {
     try {
@@ -714,7 +715,13 @@ export default function LemmerPage() {
     sondering_retour: textCol('Sondering retour', 'sondering_retour'),
     bundel_configuratie: textCol('Bundel', 'bundel_configuratie'),
     raakvlak: textCol('Raakvlak', 'raakvlak', { sort: false, wide: true }),
-    opmerking_extra: textCol('Opmerkingen', 'opmerking_extra', { sort: false, wide: true }),
+    opmerking_extra: { label: 'Opmerkingen', cell: d => (
+      <td className="inline-cell" title="Klik om te bewerken"
+        style={{ fontSize: 12, color: 'var(--text-2)', whiteSpace: 'normal', wordBreak: 'break-word', minWidth: 180, maxWidth: 320, cursor: 'pointer' }}
+        onClick={e => { e.stopPropagation(); setRemarkEdit({ id: d.id, value: d.opmerking_extra ?? '' }); }}>
+        {d.opmerking_extra || '—'}
+      </td>
+    ) },
     case_nr: textCol('Case nr.', 'case_nr'),
     project: { label: 'Project', cell: d => (
       <td style={{ whiteSpace: 'nowrap', color: 'var(--text-2)', fontWeight: 600 }}>
@@ -1183,6 +1190,21 @@ export default function LemmerPage() {
             <F label="Raakvlak" span><textarea className="field-input" rows={2} value={form.raakvlak ?? ''} onChange={e => setForm(f => ({ ...f, raakvlak: e.target.value }))} style={{ resize: 'vertical' }} /></F>
             <F label="Opmerkingen" span><textarea className="field-input" rows={2} value={form.opmerking_extra ?? ''} onChange={e => setForm(f => ({ ...f, opmerking_extra: e.target.value }))} style={{ resize: 'vertical' }} /></F>
           </div>
+        </Modal>
+      )}
+
+      {remarkEdit && (
+        <Modal open onClose={() => setRemarkEdit(null)} maxWidth={480} title="Opmerking bewerken"
+          footer={<>
+            <button className="btn" onClick={() => setRemarkEdit(null)}>Annuleren</button>
+            <button className="btn btn-primary" onClick={() => {
+              saveField(remarkEdit.id, { opmerking_extra: remarkEdit.value });
+              setRemarkEdit(null);
+            }}>Opslaan</button>
+          </>}>
+          <textarea className="field-input" rows={6} autoFocus value={remarkEdit.value}
+            onChange={e => setRemarkEdit(r => r && { ...r, value: e.target.value })}
+            style={{ resize: 'vertical', width: '100%' }} />
         </Modal>
       )}
 
