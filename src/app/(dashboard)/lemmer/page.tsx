@@ -739,12 +739,12 @@ export default function LemmerPage() {
 
   const kpiCards: { id: string; num: number; label: string; cls?: string }[] = [
     { id: 'actief',    num: stats.totaal,    label: 'Alle boringen' },
+    { id: 'openstaand', num: stats.openstaand, label: 'Openstaand' },
     { id: 'groen',     num: stats.groen,     label: 'Op schema', cls: 'stat-G' },
     { id: 'geel',      num: stats.geel,      label: 'Aandacht',  cls: 'stat-A' },
     { id: 'rood',      num: stats.rood,      label: 'Te laat',   cls: 'stat-R' },
     { id: 'gereed',    num: stats.gereed,    label: 'Gereed' },
     { id: 'vervallen', num: stats.vervallen, label: 'Vervallen' },
-    { id: 'openstaand', num: stats.openstaand, label: 'Openstaand' },
   ];
 
   /* De kop-tabel en de data-tabel zijn twee losse <table>-elementen (nodig voor
