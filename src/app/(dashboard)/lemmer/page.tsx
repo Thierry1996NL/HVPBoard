@@ -916,14 +916,18 @@ export default function LemmerPage() {
           </colgroup>
           <thead>
             <tr>
-              <th style={{ ...fixedW(STICKY_META_W), position: 'sticky', left: 0, zIndex: 6, background: stickyGrey }}></th>
-              <th style={{ ...fixedW(STICKY_NUM_W), textAlign: 'center', color: 'var(--text-4)', fontWeight: 600, position: 'sticky', left: STICKY_META_W, zIndex: 6, background: stickyGrey }} title="Volgnummer">#</th>
+              <th style={{ ...fixedW(STICKY_META_W), position: 'sticky', left: 0, zIndex: 6, background: stickyGrey, verticalAlign: 'top' }}></th>
+              <th style={{ ...fixedW(STICKY_NUM_W), color: 'var(--text-4)', fontWeight: 600, position: 'sticky', left: STICKY_META_W, zIndex: 6, background: stickyGrey, verticalAlign: 'top', padding: 0 }} title="Volgnummer">
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '8px 10px' }}><span>#</span></div>
+              </th>
               {wp === 0 && (
-                <th style={{ ...fixedW(STICKY_PROJECT_W), position: 'sticky', left: stickyProjectLeft, zIndex: 6, background: 'var(--surface2)' }}>Project</th>
+                <th style={{ ...fixedW(STICKY_PROJECT_W), position: 'sticky', left: stickyProjectLeft, zIndex: 6, background: 'var(--surface2)', verticalAlign: 'top', padding: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', padding: '8px 10px' }}><span>Project</span></div>
+                </th>
               )}
-              <th style={{ ...fixedW(STICKY_BORING_W), position: 'sticky', left: stickyBoringLeft, zIndex: 6, background: 'var(--surface2)', boxShadow: '2px 0 4px -2px rgba(0,0,0,0.10)' }}
+              <th style={{ ...fixedW(STICKY_BORING_W), position: 'sticky', left: stickyBoringLeft, zIndex: 6, background: 'var(--surface2)', boxShadow: '2px 0 4px -2px rgba(0,0,0,0.10)', verticalAlign: 'top', padding: 0 }}
                 className="sortable" onClick={() => sort('boring_nr')}>
-                Boor nr{srt('boring_nr')}
+                <div style={{ display: 'flex', alignItems: 'flex-start', padding: '8px 10px' }}><span>Boor nr{srt('boring_nr')}</span></div>
               </th>
               {visibleCols.map(id => {
                 const col = columns[id];
@@ -934,15 +938,17 @@ export default function LemmerPage() {
                 if (dragOverCol === id && dragCol && dragCol !== id) cls.push('drag-over');
                 return (
                   <th key={id} className={cls.join(' ')} draggable title="Sleep om te verplaatsen"
-                    style={{ position: 'static', whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: 1.3, verticalAlign: 'bottom' }}
+                    style={{ position: 'static', verticalAlign: 'top', padding: 0 }}
                     onDragStart={e => onDragStart(e, id)} onDragOver={e => onDragOver(e, id)}
                     onDrop={e => onDrop(e, id)} onDragEnd={onDragEnd}
                     onClick={sortable ? () => sort(col.sortKey!) : undefined}>
-                    {col.label}{sortable ? srt(col.sortKey!) : null}
+                    <div style={{ display: 'flex', alignItems: 'flex-start', padding: '8px 10px', whiteSpace: 'normal', wordBreak: 'normal', overflowWrap: 'break-word', lineHeight: 1.3 }}>
+                      <span>{col.label}{sortable ? srt(col.sortKey!) : null}</span>
+                    </div>
                   </th>
                 );
               })}
-              <th style={{ position: 'static' }}></th>
+              <th style={{ position: 'static', verticalAlign: 'top' }}></th>
             </tr>
             {filtersOpen && (
               <tr>
