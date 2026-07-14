@@ -485,7 +485,7 @@ export default function LemmerPage() {
     const a = proj.filter(d => !d.vervallen && !d.gereed);
     let groen = 0, geel = 0, rood = 0;
     for (const d of a) { const h = boringHealth(d); if (h === 'rood') rood++; else if (h === 'geel') geel++; else groen++; }
-    return { totaal: proj.length, groen, geel, rood, vervallen: proj.filter(d => d.vervallen).length, gereed: proj.filter(d => d.gereed && !d.vervallen).length };
+    return { totaal: proj.length, groen, geel, rood, openstaand: a.length, vervallen: proj.filter(d => d.vervallen).length, gereed: proj.filter(d => d.gereed && !d.vervallen).length };
   }, [data, wp]);
 
   const rows = useMemo(() => {
@@ -496,6 +496,7 @@ export default function LemmerPage() {
       if (kpi === 'vervallen') { if (!d.vervallen) return false; }
       else if (kpi === 'gereed') { if (!d.gereed || d.vervallen) return false; }
       else if (kpi === 'actief') { /* toont alles, geen uitsluiting */ }
+      else if (kpi === 'openstaand') { if (d.vervallen || d.gereed) return false; }
       else {
         if (d.vervallen || d.gereed) return false;
         if (boringHealth(d) !== kpi) return false;
@@ -743,6 +744,7 @@ export default function LemmerPage() {
     { id: 'rood',      num: stats.rood,      label: 'Te laat',   cls: 'stat-R' },
     { id: 'gereed',    num: stats.gereed,    label: 'Gereed' },
     { id: 'vervallen', num: stats.vervallen, label: 'Vervallen' },
+    { id: 'openstaand', num: stats.openstaand, label: 'Openstaand' },
   ];
 
   /* De kop-tabel en de data-tabel zijn twee losse <table>-elementen (nodig voor
