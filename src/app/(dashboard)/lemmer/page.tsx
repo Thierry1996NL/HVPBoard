@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect, useCallback, useRef, Fragment } from 'react';
+import { useState, useMemo, useEffect, useLayoutEffect, useCallback, useRef, Fragment } from 'react';
 import { useToast } from '@/components/ui/ToastProvider';
 import Modal from '@/components/ui/Modal';
 import { createClient } from '@/lib/supabase/client';
@@ -346,6 +346,7 @@ export default function LemmerPage() {
     if (syncingRef.current === 'body') { syncingRef.current = null; return; }
     if (headerScrollRef.current && bodyScrollRef.current) { syncingRef.current = 'header'; bodyScrollRef.current.scrollLeft = headerScrollRef.current.scrollLeft; }
   };
+
   const [colFilters, setColFilters]   = useState<Partial<Record<ColId, string>>>({});
   const activeFilters = Object.values(colFilters).filter(v => (v ?? '').trim()).length;
 
@@ -744,6 +745,39 @@ export default function LemmerPage() {
     { id: 'vervallen', num: stats.vervallen, label: 'Vervallen' },
   ];
 
+  /* De kop-tabel en de data-tabel zijn twee losse <table>-elementen (nodig voor
+     de sticky-opstelling hierboven), dus berekent de browser hun kolombreedtes
+     onafhankelijk van elkaar. Voor de vastgezette kolommen maakt dat niet uit
+     (die hebben een expliciete breedte via STICKY_*_W), maar de vrije kolommen
+     zouden anders verschillen: de kop-tabel bevat alleen korte labels, de
+     data-tabel de echte (vaak langere) waarden. We meten daarom de werkelijke
+     kolombreedtes van de data-tabel en leggen die op aan de kop-tabel. */
+  const bodyTableRef = useRef<HTMLTableElement>(null);
+  const [flexColWidths, setFlexColWidths] = useState<number[]>([]);
+  const frozenColCount = 2 + (wp === 0 ? 1 : 0) + 1; // meta, #, [project], boor nr
+
+  const measureFlexColWidths = useCallback(() => {
+    const firstRow = bodyTableRef.current?.tBodies[0]?.rows[0];
+    if (!firstRow || firstRow.cells.length <= frozenColCount) return;
+    const widths: number[] = [];
+    for (let i = frozenColCount; i < firstRow.cells.length; i++) {
+      widths.push(firstRow.cells[i].getBoundingClientRect().width);
+    }
+    setFlexColWidths(widths);
+  }, [frozenColCount]);
+
+  useLayoutEffect(() => {
+    measureFlexColWidths();
+  }, [measureFlexColWidths, visibleCols.join('|'), rows.length, wp, allVisible]);
+
+  useEffect(() => {
+    const el = bodyScrollRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => measureFlexColWidths());
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [measureFlexColWidths]);
+
   if (loading) return <div className="page-content"><div className="loading-bar" /></div>;
 
   return (
@@ -862,14 +896,14 @@ export default function LemmerPage() {
           sticky-berekening meer nodig. Horizontaal scrollen wordt gesynchroniseerd
           met de databcody-tabel eronder. */}
       <div ref={headerScrollRef} onScroll={syncScrollFromHeader} className="lem-header-scroll" style={{ overflowX: 'auto' }}>
-        <table className="data-table" style={{ marginBottom: 0 }}>
+        <table className="data-table" style={{ marginBottom: 0, tableLayout: flexColWidths.length ? 'fixed' : undefined }}>
           <colgroup>
             <col style={{ width: STICKY_META_W }} />
             <col style={{ width: STICKY_NUM_W }} />
             {wp === 0 && <col style={{ width: STICKY_PROJECT_W }} />}
             <col style={{ width: STICKY_BORING_W }} />
-            {visibleCols.map(id => <col key={id} />)}
-            <col />
+            {visibleCols.map((id, i) => <col key={id} style={flexColWidths[i] ? { width: flexColWidths[i] } : undefined} />)}
+            <col style={flexColWidths[visibleCols.length] ? { width: flexColWidths[visibleCols.length] } : undefined} />
           </colgroup>
           <thead>
             <tr>
@@ -891,7 +925,7 @@ export default function LemmerPage() {
                 if (dragOverCol === id && dragCol && dragCol !== id) cls.push('drag-over');
                 return (
                   <th key={id} className={cls.join(' ')} draggable title="Sleep om te verplaatsen"
-                    style={{ position: 'static' }}
+                    style={{ position: 'static', overflow: 'hidden', textOverflow: 'ellipsis' }}
                     onDragStart={e => onDragStart(e, id)} onDragOver={e => onDragOver(e, id)}
                     onDrop={e => onDrop(e, id)} onDragEnd={onDragEnd}
                     onClick={sortable ? () => sort(col.sortKey!) : undefined}>
@@ -920,7 +954,7 @@ export default function LemmerPage() {
                     value={colFilters['boring_nr'] ?? ''} onChange={e => setColFilters(f => ({ ...f, boring_nr: e.target.value }))} />
                 </th>
                 {visibleCols.map(id => (
-                  <th key={id} style={{ padding: '2px 6px', position: 'static' }}>
+                  <th key={id} style={{ padding: '2px 6px', position: 'static', overflow: 'hidden' }}>
                     <input className="inline-edit" style={{ width: '100%', minWidth: 64, fontWeight: 400 }} placeholder="filter…"
                       value={colFilters[id] ?? ''} onChange={e => setColFilters(f => ({ ...f, [id]: e.target.value }))} />
                   </th>
@@ -935,7 +969,7 @@ export default function LemmerPage() {
 
       <div className="table-wrap">
         <div className="tbl-scroll" ref={bodyScrollRef} onScroll={syncScrollFromBody}>
-          <table className="data-table">
+          <table className="data-table" ref={bodyTableRef}>
             <colgroup>
               <col style={{ width: STICKY_META_W }} />
               <col style={{ width: STICKY_NUM_W }} />
