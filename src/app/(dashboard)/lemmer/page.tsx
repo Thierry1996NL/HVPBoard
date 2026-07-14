@@ -858,8 +858,6 @@ export default function LemmerPage() {
         </div>
       </div>
 
-      </div>
-
       {/* Vaste kop-tabel — leeft ín het sticky bovenblok, dus geen aparte verticale
           sticky-berekening meer nodig. Horizontaal scrollen wordt gesynchroniseerd
           met de databcody-tabel eronder. */}
@@ -932,6 +930,7 @@ export default function LemmerPage() {
             )}
           </thead>
         </table>
+      </div>
       </div>
 
       <div className="table-wrap">
