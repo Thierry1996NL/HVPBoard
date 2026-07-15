@@ -34,7 +34,6 @@ export default function IntakePage() {
   const toast = useToast();
   const [data, setData] = useState<Boring[]>([]);
   const [wp, setWp] = useState<number>(0);
-  const [keuze, setKeuze] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [bezig, setBezig] = useState(false);
   const [inlineEdit, setInlineEdit] = useState<{ id: string; field: string } | null>(null);
@@ -73,7 +72,16 @@ export default function IntakePage() {
     [data, wp]
   );
 
-  const gekozen = (b: Boring) => keuze[b.id] ?? bepaalOpdrachtgever(b.klasse, b.lengte_m) ?? '';
+  const gekozen = (b: Boring) => b.aannemer ?? bepaalOpdrachtgever(b.klasse, b.lengte_m) ?? '';
+
+  /* Opdrachtgever-keuze meteen opslaan zodra je 'm kiest, zodat een refresh
+     de keuze niet meer kwijtraakt (voorheen alleen lokale state tot je op
+     'Doorzetten' klikte). */
+  const saveKeuze = async (id: string, value: string) => {
+    setData(prev => prev.map(x => (x.id === id ? { ...x, aannemer: value || undefined } : x)));
+    const { error } = await createClient().from('boringen').update({ aannemer: value || null } as never).eq('id', id);
+    if (error) toast(error.message, 'error');
+  };
 
   /* Inline bewerken van een boring in de intake-lijst. */
   const startInline = (b: Boring, field: string) => {
@@ -242,7 +250,7 @@ export default function IntakePage() {
                   <td style={{ ...cel, fontWeight: 600, color: voorstel ? 'var(--accent)' : 'var(--text-4)' }}>{voorstel ?? 'handmatig'}</td>
                   <td style={cel}>
                     <select className="field-input" style={{ fontSize: 12, minWidth: 110, padding: '3px 8px' }}
-                      value={gekozen(b)} onChange={e => setKeuze(k => ({ ...k, [b.id]: e.target.value }))}>
+                      value={gekozen(b)} onChange={e => saveKeuze(b.id, e.target.value)}>
                       <option value="">— kies —</option>
                       {OPDRACHTGEVERS.map(o => <option key={o} value={o}>{o}</option>)}
                     </select>
