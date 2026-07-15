@@ -93,8 +93,8 @@ export function projectHealth(bors: BoringProces[]): Health {
   return geel ? 'geel' : 'groen';
 }
 
-export type Opdrachtgever = 'Pol' | 'Heijmans' | 'Voskuilen';
-export const OPDRACHTGEVERS: Opdrachtgever[] = ['Pol', 'Heijmans', 'Voskuilen'];
+export type Opdrachtgever = 'Pol' | 'Heijmans' | 'Voskuilen' | 'Voskuilen/Pol';
+export const OPDRACHTGEVERS: Opdrachtgever[] = ['Pol', 'Heijmans', 'Voskuilen', 'Voskuilen/Pol'];
 
 /* VOORBEELD-intakeformule — bepaalt de opdrachtgever uit klasse (tonnage) + lengte.
    Gebaseerd op de rig-uitgangspunten (Heijmans heeft de zware rigs; de 10-tons/9T
