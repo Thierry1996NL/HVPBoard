@@ -16,6 +16,7 @@ interface Boring {
   lengte_m?: number;
   type_boring?: string;
   aannemer?: string;
+  bundel_configuratie?: string;
   vervallen?: boolean;
   intake_compleet?: boolean;
 }
@@ -60,7 +61,7 @@ export default function IntakePage() {
     setLoading(true);
     const { data: rows } = await createClient()
       .from('boringen')
-      .select('id, werkpakket_id, werkpakket_nr, boring_nr, locatie, klasse, lengte_m, type_boring, aannemer, vervallen, intake_compleet')
+      .select('id, werkpakket_id, werkpakket_nr, boring_nr, locatie, klasse, lengte_m, type_boring, aannemer, bundel_configuratie, vervallen, intake_compleet')
       .order('boring_nr', { ascending: true });
     setData((rows ?? []) as unknown as Boring[]);
     setLoading(false);
@@ -126,6 +127,7 @@ export default function IntakePage() {
       klasse: form.klasse ?? null,
       lengte_m: form.lengte_m ?? null,
       type_boring: form.type_boring ?? null,
+      bundel_configuratie: form.bundel_configuratie ?? null,
       intake_compleet: false,
       vervallen: false,
     };
@@ -306,6 +308,9 @@ export default function IntakePage() {
               <option value="">Onbekend / n.t.b.</option>
               {TYPES.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
+          </label>
+          <label style={veldLabel}>Bundel configuratie <span style={{ fontWeight: 400, color: 'var(--text-4)' }}>(optioneel, bijv. 1×200mm + 1×160mm)</span>
+            <input className="field-input" placeholder="Vul bundelconfiguratie in" value={form.bundel_configuratie ?? ''} onChange={e => setForm(f => ({ ...f, bundel_configuratie: e.target.value }))} />
           </label>
           <div style={{ fontSize: 12, color: 'var(--text-2)', background: 'var(--surface-2, #f5f7fa)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 12px' }}>
             Voorstel opdrachtgever (formule):{' '}
