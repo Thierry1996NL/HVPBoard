@@ -205,16 +205,16 @@ export default function IntakePage() {
         <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 13 }}>
           <thead>
             <tr style={{ background: 'var(--surface-2, #f5f7fa)' }}>
-              {['Project', 'Boor nr', 'WP', 'Locatie', 'Klasse', 'L (m)', 'Type', 'Voorstel', 'Opdrachtgever', '', ''].map((h, i) => (
+              {['Project', 'Boor nr', 'WP', 'Locatie', 'Klasse', 'L (m)', 'Type', 'Bundel configuratie', 'Voorstel', 'Opdrachtgever', '', ''].map((h, i) => (
                 <th key={i} style={{ textAlign: 'left', padding: '8px 12px', borderBottom: '1px solid var(--border)', color: 'var(--text-2)', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={11} style={{ padding: 20, textAlign: 'center', color: 'var(--text-3)' }}>Laden…</td></tr>
+              <tr><td colSpan={12} style={{ padding: 20, textAlign: 'center', color: 'var(--text-3)' }}>Laden…</td></tr>
             ) : pending.length === 0 ? (
-              <tr><td colSpan={11} style={{ padding: 24, textAlign: 'center', color: 'var(--text-3)' }}>Geen boringen in de intake — alles is doorgezet naar het project.</td></tr>
+              <tr><td colSpan={12} style={{ padding: 24, textAlign: 'center', color: 'var(--text-3)' }}>Geen boringen in de intake — alles is doorgezet naar het project.</td></tr>
             ) : pending.map(b => {
               const voorstel = bepaalOpdrachtgever(b.klasse, b.lengte_m);
               const isEd = (f: string) => inlineEdit?.id === b.id && inlineEdit.field === f;
@@ -249,6 +249,8 @@ export default function IntakePage() {
                     {isEd('lengte_m') ? inp('lengte_m', 'number', 70) : (b.lengte_m ?? '—')}</td>
                   <td style={{ ...cel, cursor: 'pointer' }} onClick={() => !isEd('type_boring') && startInline(b, 'type_boring')}>
                     {isEd('type_boring') ? sel('type_boring', TYPES) : (b.type_boring ?? '—')}</td>
+                  <td style={{ ...cel, cursor: 'pointer' }} onClick={() => !isEd('bundel_configuratie') && startInline(b, 'bundel_configuratie')}>
+                    {isEd('bundel_configuratie') ? inp('bundel_configuratie', 'text', 150) : (b.bundel_configuratie ?? '—')}</td>
                   <td style={{ ...cel, fontWeight: 600, color: voorstel ? 'var(--accent)' : 'var(--text-4)' }}>{voorstel ?? 'handmatig'}</td>
                   <td style={cel}>
                     <select className="field-input" style={{ fontSize: 12, minWidth: 110, padding: '3px 8px' }}
