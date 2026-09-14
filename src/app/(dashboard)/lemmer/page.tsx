@@ -235,8 +235,6 @@ function genereerStapDatums(start: string): Record<string, { plandatum: string; 
   }
   return out;
 }
-const STAP_STATUS = ['Niet gestart', 'Loopt', 'Gereed', 'N.v.t.'];
-const STAP_KLEUR: Record<string, string> = { 'Gereed': 'var(--g-fg)', 'Loopt': 'var(--r-fg)', 'N.v.t.': 'var(--text-4)', 'Niet gestart': 'var(--border-md)' };
 /* Per stap, per boring: status + eigenaar + plandatum + deadline + afgerond. */
 type StapData = { status?: string; eigenaar?: string; plandatum?: string; deadline?: string; afgerond?: boolean };
 type Persoon = { id: string; naam: string };
@@ -245,7 +243,7 @@ type Persoon = { id: string; naam: string };
 type ColId =
   | 'boring_nr' | 'werkpakket_nr' | 'locatie' | 'lengte_m' | 'type_boring' | 'aannemer' | 'klasse'
   | 'prioritering' | 'oplevering_toolgate' | 'status_ontwerp' | 'projectfase' | 'engineeringsfase'
-  | 'startdatum' | 'fase0' | 'faseG' | 'fase1' | 'fase2' | 'einddatum' | 'eind_weken' | 'actieve_stap' | 'actieve_eigenaar'
+  | 'startdatum' | 'einddatum' | 'eind_weken'
   | 'aanlevering_compleet' | 'datum_gereed' | 'ter_controle_uitvoering' | 'retour_uitvoering' | 'schouw_uitgevoerd'
   | 'opmerkingen_uitvoering' | 'planning_apds' | 'ontwerp_pct' | 'tek_pct' | 'status_werkterrein'
   | 'status_berekening' | 'proefsleuf_nr' | 'sondering_nr' | 'sondering_aangevraagd' | 'sondering_retour'
@@ -260,7 +258,7 @@ const DEFAULT_COL_ORDER: ColId[] = [
   'oplevering_toolgate', 'planning_apds', 'status_ontwerp', 'tek_pct', 'status_werkterrein', 'status_berekening',
   'proefsleuf_nr', 'sondering_nr', 'bundel_configuratie', 'opmerking_extra',
   'prioritering', 'projectfase', 'engineeringsfase',
-  'startdatum', 'fase0', 'faseG', 'fase1', 'fase2', 'eind_weken', 'einddatum', 'actieve_stap', 'actieve_eigenaar',
+  'startdatum', 'eind_weken', 'einddatum',
   'aanlevering_compleet', 'datum_gereed', 'ter_controle_uitvoering', 'retour_uitvoering', 'schouw_uitgevoerd',
   'opmerkingen_uitvoering', 'ontwerp_pct', 'sondering_aangevraagd', 'sondering_retour',
   'raakvlak', 'gereed',
@@ -268,15 +266,13 @@ const DEFAULT_COL_ORDER: ColId[] = [
 /* Standaard verborgen kolommen (compacte weergave) — toonbaar via de kolomkiezer of de knop Uitklappen. */
 const DEFAULT_HIDDEN: ColId[] = [
   'prioritering', 'projectfase', 'engineeringsfase',
-  'startdatum', 'fase0', 'faseG', 'fase1', 'fase2', 'eind_weken', 'einddatum', 'actieve_stap', 'actieve_eigenaar',
+  'startdatum', 'eind_weken', 'einddatum',
   'aanlevering_compleet', 'datum_gereed', 'ter_controle_uitvoering', 'retour_uitvoering', 'schouw_uitgevoerd',
   'opmerkingen_uitvoering', 'ontwerp_pct', 'sondering_aangevraagd', 'sondering_retour',
   'raakvlak', 'gereed',
 ];
 const COL_ORDER_KEY = 'hvp_lemmer_colorder_v13';
 const HIDDEN_KEY = 'hvp_lemmer_hidden_v8';
-/* Koppeling fase-kolom → index in PROCES_FASEN */
-const FASE_COL: Record<string, number> = { fase0: 0, faseG: 1, fase1: 2, fase2: 3 };
 /* Berekende kolommen zonder eigen databaseveld — niet filterbaar via de header. */
 const NIET_FILTERBAAR: ColId[] = [];
 
@@ -329,10 +325,6 @@ export default function LemmerPage() {
   const [intakeMode, setIntakeMode] = useState(false);
   const [intakeKeuze, setIntakeKeuze] = useState<Record<string, string>>({});
   const [kpi, setKpi]         = useState<string>('actief');
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const toggleExpand = (id: string) => setExpanded(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
-  const [expandedFases, setExpandedFases] = useState<Set<string>>(new Set());
-  const toggleFase = (key: string) => setExpandedFases(prev => { const n = new Set(prev); if (n.has(key)) n.delete(key); else n.add(key); return n; });
   const [sortCol, setSortCol] = useState<keyof LemmerBoring | null>(null);
   const [sortDir, setSortDir] = useState(1);
 
@@ -429,12 +421,6 @@ export default function LemmerPage() {
     const raw = (d.stappen ?? {})[id] as StapData | string | undefined;
     return typeof raw === 'string' ? { status: raw } : (raw ?? {});
   };
-  /* Eén veld van één stap opslaan in de JSONB-kolom 'stappen'. */
-  const saveStapVeld = async (d: LemmerBoring, id: string, patch: Partial<StapData>) => {
-    const next: Record<string, StapData> = { ...(d.stappen ?? {}) };
-    next[id] = { ...getStap(d, id), ...patch };
-    try { await save(d.id, { stappen: next }); } catch (e) { toast((e as Error).message, 'error'); }
-  };
   /* Startdatum opslaan én meteen plandatum + deadline van alle stappen doorrekenen. */
   const setStartEnPlanning = async (d: LemmerBoring, start?: string) => {
     if (!start) { try { await save(d.id, { startdatum: undefined }); } catch (e) { toast((e as Error).message, 'error'); } return; }
@@ -445,14 +431,6 @@ export default function LemmerPage() {
     catch (e) { toast((e as Error).message, 'error'); }
   };
   const stapDone = (sd: StapData) => sd.afgerond === true || sd.status === 'Gereed';
-  const stappenGereed = (d: LemmerBoring) => ALLE_STAPPEN.filter(s => stapDone(getStap(d, s.id))).length;
-  /* De stap waar nu actief aan gewerkt wordt: eerst een stap met status 'Loopt',
-     anders de eerstvolgende nog niet afgeronde stap (N.v.t. overslaan). */
-  const activeStap = (d: LemmerBoring): { step: ProcesStap; sd: StapData } | null => {
-    const lopend = ALLE_STAPPEN.find(s => getStap(d, s.id).status === 'Loopt');
-    const next = lopend ?? ALLE_STAPPEN.find(s => { const sd = getStap(d, s.id); return !stapDone(sd) && sd.status !== 'N.v.t.'; });
-    return next ? { step: next, sd: getStap(d, next.id) } : null;
-  };
 
   /* Afgeleide status uit ontwerp % (voor de KPI-kaarten). */
   const rowStatus = (d: LemmerBoring) =>
@@ -475,10 +453,6 @@ export default function LemmerPage() {
   const colFilterValue = (d: LemmerBoring, id: ColId): string => {
     if (id === 'project') return PROJECTEN.find(p => p.wp === d.werkpakket_id)?.naam ?? '';
     if (id === 'gereed') return d.gereed ? 'ja' : 'nee';
-    if (FASE_COL[id] !== undefined) {
-      const f = PROCES_FASEN[FASE_COL[id]];
-      return `${f.stappen.filter(s => stapDone(getStap(d, s.id))).length}/${f.stappen.length}`;
-    }
     if (id === 'einddatum' || id === 'eind_weken') {
       const deadlines = ALLE_STAPPEN.map(s => getStap(d, s.id).deadline).filter(Boolean) as string[];
       const e = deadlines.length ? deadlines.reduce((a, b) => (a > b ? a : b)) : einddatumVan(d.startdatum);
@@ -486,8 +460,6 @@ export default function LemmerPage() {
       if (!e) return '';
       return String(Math.round((new Date(e).getTime() - Date.now()) / (1000 * 60 * 60 * 24 * 7)));
     }
-    if (id === 'actieve_stap') { const a = activeStap(d); return a ? `${a.step.nr} ${a.step.titel}` : ''; }
-    if (id === 'actieve_eigenaar') { const a = activeStap(d); return a?.sd.eigenaar ?? ''; }
     return String(d[id as keyof LemmerBoring] ?? '');
   };
 
@@ -601,24 +573,6 @@ export default function LemmerPage() {
     ),
   });
 
-  /* Fase-kolom: toont x/y voortgang van die fase; klik opent de boring + die fase. */
-  const faseCol = (label: string, colId: string): { label: string; sortKey?: keyof LemmerBoring; cell: (d: LemmerBoring) => React.ReactNode } => ({
-    label,
-    cell: d => {
-      const f = PROCES_FASEN[FASE_COL[colId]];
-      const total = f.stappen.length;
-      const klaar = f.stappen.filter(s => stapDone(getStap(d, s.id))).length;
-      const compleet = klaar === total && total > 0;
-      const begonnen = klaar > 0;
-      return (
-        <td style={{ textAlign: 'center' }} title={`${f.fase} — open`}
-          onClick={() => { setExpanded(prev => { const n = new Set(prev); n.add(d.id); return n; }); toggleFase(`${d.id}|${FASE_COL[colId]}`); }}>
-          <span className={`lem-prog lem-prog-btn${compleet ? ' done' : begonnen ? ' active' : ''}`}>{klaar}/{total}</span>
-        </td>
-      );
-    },
-  });
-
   /* Weken-chip: kleur op basis van de ECHTE datum. Deadline vandaag of voorbij = rood. */
   const wkChip = (deadline?: string | null): React.ReactNode => {
     if (!deadline) return null;
@@ -672,10 +626,6 @@ export default function LemmerPage() {
         display={<span style={{ fontSize: 11, color: 'var(--text-3)', whiteSpace: 'nowrap' }}>{fmtDate(d.startdatum)}</span>}
         onSave={v => setStartEnPlanning(d, (v as string | undefined) || undefined)} />
     ) },
-    fase0: faseCol('Fase 0', 'fase0'),
-    faseG: faseCol('Gate', 'faseG'),
-    fase1: faseCol('Fase 1', 'fase1'),
-    fase2: faseCol('Fase 2', 'fase2'),
     einddatum: { label: 'Einddatum (auto)', cell: d => {
       const deadlines = ALLE_STAPPEN.map(s => getStap(d, s.id).deadline).filter(Boolean) as string[];
       const e = deadlines.length ? deadlines.reduce((a, b) => (a > b ? a : b)) : einddatumVan(d.startdatum);
@@ -688,30 +638,7 @@ export default function LemmerPage() {
       if (!e) return <td style={{ color: 'var(--text-4)', fontSize: 11 }}>—</td>;
       return <td style={{ whiteSpace: 'nowrap' }}>{wkChip(e)}</td>;
     } },
-    actieve_stap: { label: 'Actieve stap', cell: d => {
-      const a = activeStap(d);
-      if (!a) return <td style={{ color: 'var(--text-4)', fontSize: 11 }}>{stappenGereed(d) === ALLE_STAPPEN.length ? 'Alles gereed' : '—'}</td>;
-      const { step, sd } = a;
-      return (
-        <td style={{ minWidth: 230 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <div style={{ fontSize: 12, color: 'var(--text-2)', fontWeight: 500, whiteSpace: 'nowrap' }}>
-              <span style={{ color: 'var(--accent)', fontWeight: 700 }}>{step.nr}.</span> {step.titel}
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10, color: 'var(--text-4)', whiteSpace: 'nowrap' }}>
-              <span>{sd.eigenaar || 'geen eigenaar'}</span><span>·</span>
-              <span>{sd.deadline ? fmtDate(sd.deadline) : 'geen deadline'}</span>
-              {wkChip(sd.deadline)}
-            </div>
-          </div>
-        </td>
-      );
-    } },
     planning_apds: dateCol("Planning APD's", 'planning_apds'),
-    actieve_eigenaar: { label: 'Eigenaar actieve stap', cell: d => {
-      const a = activeStap(d);
-      return <td style={{ whiteSpace: 'nowrap', color: 'var(--text-2)' }}>{a?.sd.eigenaar || '—'}</td>;
-    } },
     aanlevering_compleet: dateCol('Aanlevering compleet', 'aanlevering_compleet'),
     datum_gereed: dateCol('Datum gereed (verwacht)', 'datum_gereed'),
     ter_controle_uitvoering: dateCol('Ter controle uitvoering', 'ter_controle_uitvoering'),
@@ -1010,7 +937,6 @@ export default function LemmerPage() {
               {rows.length === 0 ? (
                 <tr><td colSpan={visibleCols.length + 4 + (wp === 0 ? 1 : 0)}><div className="empty-state"><strong>{intakeMode ? 'Geen boringen in de intake' : 'Geen boringen gevonden'}</strong>{intakeMode ? 'Alles is doorgezet naar het project.' : 'Pas de filters aan.'}</div></td></tr>
               ) : rows.map((d, idx) => {
-                const isOpen = expanded.has(d.id);
                 const rowBg = d.gereed ? 'var(--n-bg)'
                   : (!d.vervallen && boringHealth(d) === 'rood') ? 'var(--b-bg)'
                   : (!d.vervallen && boringHealth(d) === 'geel') ? 'var(--r-bg)'
@@ -1021,12 +947,7 @@ export default function LemmerPage() {
                       opacity: d.vervallen ? 0.45 : d.gereed ? 0.6 : 1,
                       background: rowBg === 'var(--surface)' ? undefined : rowBg,
                     }}>
-                      <td style={{ ...fixedW(STICKY_META_W), textAlign: 'center', cursor: 'pointer', whiteSpace: 'nowrap', position: 'sticky', left: 0, zIndex: 3, background: stickyGrey }}
-                        title={isOpen ? 'Stappen inklappen' : 'Stappen uitklappen'}
-                        onClick={() => toggleExpand(d.id)}>
-                        <span className={`lem-chev${isOpen ? ' open' : ''}`} style={{ fontSize: 10 }}>▶</span>
-                        {(() => { const g = stappenGereed(d); return <span style={{ marginLeft: 5, fontSize: 9, fontWeight: 700, color: g > 0 ? 'var(--g-fg)' : 'var(--text-4)' }}>{g}/{ALLE_STAPPEN.length}</span>; })()}
-                      </td>
+                      <td style={{ ...fixedW(STICKY_META_W), position: 'sticky', left: 0, zIndex: 3, background: stickyGrey }} />
                       <td style={{ ...fixedW(STICKY_NUM_W), textAlign: 'center', fontSize: 11, color: 'var(--text-4)', fontVariantNumeric: 'tabular-nums', position: 'sticky', left: STICKY_META_W, zIndex: 3, background: stickyGrey }}>{idx + 1}</td>
                       {wp === 0 && (
                         <td style={{ ...fixedW(STICKY_PROJECT_W), position: 'sticky', left: stickyProjectLeft, zIndex: 3, background: rowBg, whiteSpace: 'nowrap', textOverflow: 'ellipsis', color: 'var(--text-2)', fontWeight: 600 }}>
@@ -1055,109 +976,6 @@ export default function LemmerPage() {
                         )}
                       </td>
                     </tr>
-                    {isOpen && (
-                      <tr>
-                        <td></td>
-                        <td></td>
-                        {wp === 0 && <td></td>}
-                        <td></td>
-                        <td colSpan={visibleCols.length + 1} style={{ padding: '8px 10px 16px 8px', background: 'var(--bg)' }}>
-                          <div className="lem-sub-panel">
-                            <div style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 8 }}>
-                              Engineering-stappen — <strong style={{ color: 'var(--text-2)' }}>{stappenGereed(d)} van {ALLE_STAPPEN.length}</strong> gereed
-                            </div>
-                            <table className="lem-sub-table" style={{ maxWidth: 1180 }}>
-                              <thead>
-                                <tr>
-                                  <th>Stap</th><th>Status</th><th>Eigenaar</th><th>Plandatum</th><th>Deadline</th><th>Weken resterend</th><th style={{ textAlign: 'center' }}>Afgerond</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {PROCES_FASEN.map((f, fi) => {
-                                  const faseKey = `${d.id}|${fi}`;
-                                  const faseOpen = expandedFases.has(faseKey);
-                                  const total = f.stappen.length;
-                                  const klaar = f.stappen.filter(s => stapDone(getStap(d, s.id))).length;
-                                  const compleet = klaar === total && total > 0;
-                                  return (
-                                    <Fragment key={f.fase}>
-                                      <tr className="lem-fase-row" onClick={() => toggleFase(faseKey)}>
-                                        <td colSpan={7} style={{ padding: '8px 10px' }}>
-                                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                            <span className={`lem-chev${faseOpen ? ' open' : ''}`}>▶</span>
-                                            <span className="lem-fase-name">{f.fase}</span>
-                                            <span className={`lem-prog${compleet ? ' done' : ''}`} style={{ marginLeft: 2 }}>{klaar}/{total}</span>
-                                          </div>
-                                        </td>
-                                      </tr>
-                                      {faseOpen && f.stappen.map(s => {
-                                        const sd = getStap(d, s.id);
-                                        const dot = STAP_KLEUR[sd.status ?? ''] ?? 'var(--border-md)';
-                                        const teLaat = (() => {
-                                          if (!sd.deadline || stapDone(sd) || sd.status === 'N.v.t.') return false;
-                                          const d0 = new Date(sd.deadline); d0.setHours(0, 0, 0, 0);
-                                          const t0 = new Date(); t0.setHours(0, 0, 0, 0);
-                                          return d0.getTime() <= t0.getTime();
-                                        })();
-                                        return (
-                                          <tr className="lem-step-row" key={s.id}
-                                            style={teLaat ? { background: 'var(--b-bg)', boxShadow: 'inset 3px 0 0 var(--b-fg)' } : undefined}>
-                                            <td style={{ minWidth: 320 }}>
-                                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                                <span className="lem-step-num">{s.nr}</span>
-                                                <span className="lem-dot" style={{ background: dot }} />
-                                                <span className="lem-step-title">{s.titel}</span>
-                                                <span className="lem-step-meta">· {s.wie} · {s.tijd}</span>
-                                              </div>
-                                            </td>
-                                            <td>
-                                              <select className="inline-edit" style={{ minWidth: 104, cursor: 'pointer' }}
-                                                value={sd.status ?? ''} onChange={e => saveStapVeld(d, s.id, { status: e.target.value || undefined })}>
-                                                <option value="">—</option>
-                                                {STAP_STATUS.map(st => <option key={st} value={st}>{st}</option>)}
-                                              </select>
-                                            </td>
-                                            <td>
-                                              <select className="inline-edit" style={{ minWidth: 150, cursor: 'pointer' }}
-                                                value={sd.eigenaar ?? ''} onChange={e => saveStapVeld(d, s.id, { eigenaar: e.target.value || undefined })}>
-                                                <option value="">—</option>
-                                                {sd.eigenaar && !personen.some(p => p.naam === sd.eigenaar) && <option value={sd.eigenaar}>{sd.eigenaar}</option>}
-                                                {personen.map(p => <option key={p.id} value={p.naam}>{p.naam}</option>)}
-                                              </select>
-                                            </td>
-                                            <td>
-                                              <input className="inline-edit" type="date" style={{ minWidth: 120, cursor: 'pointer' }} value={sd.plandatum ?? ''}
-                                                onChange={e => saveStapVeld(d, s.id, { plandatum: e.target.value || undefined })}
-                                                onClick={e => { try { (e.currentTarget as HTMLInputElement & { showPicker?: () => void }).showPicker?.(); } catch { /* */ } }} />
-                                            </td>
-                                            <td>
-                                              <input className="inline-edit" type="date" style={{ minWidth: 120, cursor: 'pointer' }} value={sd.deadline ?? ''}
-                                                onChange={e => saveStapVeld(d, s.id, { deadline: e.target.value || undefined })}
-                                                onClick={e => { try { (e.currentTarget as HTMLInputElement & { showPicker?: () => void }).showPicker?.(); } catch { /* */ } }} />
-                                            </td>
-                                            <td style={{ whiteSpace: 'nowrap' }}>
-                                              {sd.afgerond
-                                                ? <span className="wk-chip wk-ok">afgerond</span>
-                                                : sd.deadline
-                                                  ? wkChip(sd.deadline)
-                                                  : <span style={{ color: 'var(--text-4)', fontSize: 11 }}>—</span>}
-                                            </td>
-                                            <td style={{ textAlign: 'center' }}>
-                                              <input type="checkbox" checked={!!sd.afgerond} style={{ width: 15, height: 15, cursor: 'pointer', accentColor: 'var(--accent)' }}
-                                                onChange={e => saveStapVeld(d, s.id, { afgerond: e.target.checked })} />
-                                            </td>
-                                          </tr>
-                                        );
-                                      })}
-                                    </Fragment>
-                                  );
-                                })}
-                              </tbody>
-                            </table>
-                          </div>
-                        </td>
-                      </tr>
-                    )}
                   </Fragment>
                 );
               })}
