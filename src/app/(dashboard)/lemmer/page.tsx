@@ -374,8 +374,12 @@ export default function LemmerPage() {
     if (headerScrollRef.current && bodyScrollRef.current) { syncingRef.current = 'header'; bodyScrollRef.current.scrollLeft = headerScrollRef.current.scrollLeft; }
   };
 
-  const [colFilters, setColFilters]   = useState<Partial<Record<ColId, string>>>({});
-  const activeFilters = Object.values(colFilters).filter(v => (v ?? '').trim()).length;
+  /* Kolomfilter, Excel-stijl: per kolom een set van 'aangevinkte' waarden. Geen entry
+     voor een kolom betekent 'alles aangevinkt' (dus geen restrictie op die kolom). */
+  const [colFilters, setColFilters]   = useState<Partial<Record<ColId, Set<string>>>>({});
+  const activeFilters = Object.keys(colFilters).length;
+  const [filterMenu, setFilterMenu]   = useState<{ id: ColId; x: number; y: number } | null>(null);
+  const [filterSearch, setFilterSearch] = useState('');
 
   const [modal, setModal]   = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
@@ -505,34 +509,86 @@ export default function LemmerPage() {
     return { totaal: proj.length, groen, geel, rood, openstaand: a.length, vervallen: proj.filter(d => d.vervallen).length, gereed: proj.filter(d => d.gereed && !d.vervallen).length };
   }, [data, wp]);
 
+  const preFiltered = useMemo(() => data.filter(d => {
+    if (wp !== 0 && d.werkpakket_id !== wp) return false;
+    if (intakeMode) { if (d.intake_compleet === true) return false; }
+    else { if (d.intake_compleet !== true) return false; }
+    if (kpi === 'vervallen') { if (!d.vervallen) return false; }
+    else if (kpi === 'gereed') { if (!d.gereed || d.vervallen) return false; }
+    else if (kpi === 'actief') { /* toont alles, geen uitsluiting */ }
+    else if (kpi === 'openstaand') { if (d.vervallen || d.gereed) return false; }
+    else {
+      if (d.vervallen || d.gereed) return false;
+      if (boringHealth(d) !== kpi) return false;
+    }
+    if (search) {
+      const q = search.toLowerCase();
+      return [d.boring_nr, d.locatie, d.werkpakket_nr, d.aannemer, d.type_boring, d.prioritering].some(v => (v ?? '').toLowerCase().includes(q));
+    }
+    return true;
+  }), [data, search, kpi, wp, intakeMode]);
+
   const rows = useMemo(() => {
-    let r = data.filter(d => {
-      if (wp !== 0 && d.werkpakket_id !== wp) return false;
-      if (intakeMode) { if (d.intake_compleet === true) return false; }
-      else { if (d.intake_compleet !== true) return false; }
-      if (kpi === 'vervallen') { if (!d.vervallen) return false; }
-      else if (kpi === 'gereed') { if (!d.gereed || d.vervallen) return false; }
-      else if (kpi === 'actief') { /* toont alles, geen uitsluiting */ }
-      else if (kpi === 'openstaand') { if (d.vervallen || d.gereed) return false; }
-      else {
-        if (d.vervallen || d.gereed) return false;
-        if (boringHealth(d) !== kpi) return false;
-      }
-      if (search) {
-        const q = search.toLowerCase();
-        return [d.boring_nr, d.locatie, d.werkpakket_nr, d.aannemer, d.type_boring, d.prioritering].some(v => (v ?? '').toLowerCase().includes(q));
-      }
-      return true;
-    });
+    let r = preFiltered;
     if (sortCol) r = [...r].sort((a, b) => {
       const av = a[sortCol], bv = b[sortCol];
       return String(av ?? '').localeCompare(String(bv ?? ''), 'nl', { numeric: true }) * sortDir;
     });
-    const fEntries = Object.entries(colFilters).filter(([, v]) => (v ?? '').trim());
-    if (fEntries.length) r = r.filter(d => fEntries.every(([id, v]) =>
-      colFilterValue(d, id as ColId).toLowerCase().includes((v as string).trim().toLowerCase())));
+    const fEntries = Object.entries(colFilters).filter(([, v]) => v !== undefined) as [ColId, Set<string>][];
+    if (fEntries.length) r = r.filter(d => fEntries.every(([id, set]) => set.has(colFilterValue(d, id))));
     return r;
-  }, [data, search, kpi, sortCol, sortDir, colFilters, wp, intakeMode]);
+  }, [preFiltered, sortCol, sortDir, colFilters]);
+
+  /* Unieke waarden (+ aantal) voor het open kolomfilter-menu — berekend over de rijen die aan
+     alle ANDERE actieve filters voldoen, zodat het lijstje in het menu blijft kloppen met wat
+     je al hebt aan-/uitgevinkt (net als in Excel). */
+  const filterOptions = useMemo(() => {
+    const id = filterMenu?.id;
+    if (!id) return [] as { value: string; count: number }[];
+    let base = preFiltered;
+    const otherEntries = Object.entries(colFilters).filter(([k, v]) => k !== id && v !== undefined) as [ColId, Set<string>][];
+    if (otherEntries.length) base = base.filter(d => otherEntries.every(([k, set]) => set.has(colFilterValue(d, k))));
+    const counts = new Map<string, number>();
+    for (const d of base) { const v = colFilterValue(d, id); counts.set(v, (counts.get(v) ?? 0) + 1); }
+    return Array.from(counts.entries())
+      .map(([value, count]) => ({ value, count }))
+      .sort((a, b) => a.value.localeCompare(b.value, 'nl', { numeric: true }));
+  }, [filterMenu, preFiltered, colFilters]);
+
+  const filterOptionsFiltered = useMemo(() => {
+    if (!filterSearch.trim()) return filterOptions;
+    const q = filterSearch.trim().toLowerCase();
+    return filterOptions.filter(o => (o.value || '(leeg)').toLowerCase().includes(q));
+  }, [filterOptions, filterSearch]);
+
+  const filterCurrentSet = filterMenu ? colFilters[filterMenu.id] : undefined;
+  const filterAllChecked = !filterCurrentSet || filterCurrentSet.size === filterOptions.length;
+  const openFilterMenu = (e: React.MouseEvent, id: ColId) => {
+    e.stopPropagation();
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setFilterSearch('');
+    setFilterMenu(m => (m?.id === id ? null : { id, x: r.left, y: r.bottom + 4 }));
+  };
+  const toggleFilterValue = (id: ColId, value: string) => {
+    setColFilters(prev => {
+      const allValues = filterOptions.map(o => o.value);
+      const current = new Set(prev[id] ?? allValues);
+      if (current.has(value)) current.delete(value); else current.add(value);
+      const next = { ...prev };
+      if (current.size === allValues.length) delete next[id]; else next[id] = current;
+      return next;
+    });
+  };
+  const toggleFilterSelectAll = (id: ColId) => {
+    setColFilters(prev => {
+      const allValues = filterOptions.map(o => o.value);
+      const currentSize = prev[id] ? prev[id]!.size : allValues.length;
+      const next = { ...prev };
+      if (currentSize === allValues.length) next[id] = new Set(); else delete next[id];
+      return next;
+    });
+  };
+  const clearFilterCol = (id: ColId) => setColFilters(prev => { const n = { ...prev }; delete n[id]; return n; });
 
   /* Aantal boringen dat nog in de intake staat (huidig project of alle). */
   const intakeCount = useMemo(
