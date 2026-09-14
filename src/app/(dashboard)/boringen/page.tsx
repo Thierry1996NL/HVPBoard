@@ -11,7 +11,7 @@ const KOLOM_VOLGORDE: string[] = [
   'type_boring', 'klasse', 'aannemer', 'prioritering', 'status', 'status_ontwerp', 'hdd_tek_pct',
   'status_werkterrein', 'status_berekening', 'apd_verantw', 'planning_apds', 'oplevering_toolgate',
   'proefsleuf_nr', 'sondering_nr', 'bundel_configuratie', 'opmerkingen',
-  'startdatum', 'einddatum', 'intake_compleet', 'vervallen', 'created_at',
+  'startdatum', 'einddatum', 'aanleverdatum', 'datum_gereed', 'intake_compleet', 'vervallen', 'created_at',
 ];
 const NUMERIEKE_KOLOMMEN = new Set(['lengte_m', 'hdd_tek_pct', 'diameter_mm', 'diepte_m', 'werkpakket_id']);
 const BOOL_KOLOMMEN = new Set(['vervallen', 'intake_compleet', 'engineering_afgerond']);
@@ -91,6 +91,10 @@ interface Boring {
   oplevering_toolgate?: string;
   planning_apds?: string;
   apd_verantw?: string;
+  startdatum?: string;
+  einddatum?: string;
+  aanleverdatum?: string;
+  datum_gereed?: string;
   status_ontwerp?: string;
   hdd_tek_pct?: number;
   status_werkterrein?: string;
@@ -182,7 +186,12 @@ function BoringDetail({
       {/* ── Sectie 2: Planning ────────────────────────────────────────────── */}
       <Section title="Planning">
         <Grid>
-          <Row label="APD verantw."  value={boring.apd_verantw} chip />
+          <Row label="Startdatum" value={boring.startdatum
+            ? new Date(boring.startdatum).toLocaleDateString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric' })
+            : undefined} />
+          <Row label="Einddatum" value={boring.einddatum
+            ? new Date(boring.einddatum).toLocaleDateString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric' })
+            : undefined} />
           <Row label="Planning APD's" value={boring.planning_apds
             ? new Date(boring.planning_apds).toLocaleDateString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric' })
             : undefined} />
@@ -191,6 +200,19 @@ function BoringDetail({
             : undefined} />
         </Grid>
       </Section>
+
+      {boring.type_boring === 'Nanodrill' && (
+        <Section title="Nanodrill (Heijmans)">
+          <Grid>
+            <Row label="Aanleverdatum" value={boring.aanleverdatum
+              ? new Date(boring.aanleverdatum).toLocaleDateString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric' })
+              : undefined} />
+            <Row label="Datum gereed" value={boring.datum_gereed
+              ? new Date(boring.datum_gereed).toLocaleDateString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric' })
+              : undefined} />
+          </Grid>
+        </Section>
+      )}
 
       {/* ── Sectie 3: Tekenwerk & Status ─────────────────────────────────── */}
       <Section title="Tekenwerk & Status">
@@ -664,10 +686,17 @@ export default function BoringenPage() {
           <F label="Boor nr. *"><input className="field-input" value={form.boring_nr ?? ''} placeholder="HDD-001" onChange={e => setForm(f => ({ ...f, boring_nr: e.target.value }))} /></F>
           <F label="Project *"><select className="field-input" value={form.werkpakket_id ?? ''} onChange={e => setForm(f => ({ ...f, werkpakket_id: parseInt(e.target.value) }))}><option value="">— Kies project —</option>{projects.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}</select></F>
           <F label="Werkpakket nr."><input className="field-input" value={form.werkpakket_nr ?? ''} placeholder="WP01" onChange={e => setForm(f => ({ ...f, werkpakket_nr: e.target.value }))} /></F>
-          <F label="APD verantw."><input className="field-input" value={form.apd_verantw ?? ''} placeholder="ApD-1" onChange={e => setForm(f => ({ ...f, apd_verantw: e.target.value }))} /></F>
+          <F label="Startdatum"><input className="field-input" type="date" value={form.startdatum ?? ''} onChange={e => setForm(f => ({ ...f, startdatum: e.target.value }))} /></F>
+          <F label="Einddatum"><input className="field-input" type="date" value={form.einddatum ?? ''} onChange={e => setForm(f => ({ ...f, einddatum: e.target.value }))} /></F>
           <F label="Locatie" span><input className="field-input" value={form.locatie ?? ''} onChange={e => setForm(f => ({ ...f, locatie: e.target.value }))} /></F>
           <F label="Lengte HDD (m)"><input className="field-input" type="number" value={form.lengte_m ?? ''} onChange={e => setForm(f => ({ ...f, lengte_m: parseFloat(e.target.value) || undefined }))} /></F>
           <F label="Type boring"><select className="field-input" value={form.type_boring ?? ''} onChange={e => setForm(f => ({ ...f, type_boring: e.target.value }))}><option value="">— Kies type —</option>{TYPES_BORING.map(t => <option key={t}>{t}</option>)}</select></F>
+          {form.type_boring === 'Nanodrill' && (
+            <>
+              <F label="Aanleverdatum"><input className="field-input" type="date" value={form.aanleverdatum ?? ''} onChange={e => setForm(f => ({ ...f, aanleverdatum: e.target.value }))} /></F>
+              <F label="Datum gereed"><input className="field-input" type="date" value={form.datum_gereed ?? ''} onChange={e => setForm(f => ({ ...f, datum_gereed: e.target.value }))} /></F>
+            </>
+          )}
           <F label="Klasse"><select className="field-input" value={form.klasse ?? ''} onChange={e => setForm(f => ({ ...f, klasse: e.target.value }))}><option value="">—</option>{KLASSEN.map(k => <option key={k}>{k}</option>)}</select></F>
           <F label="Aannemer"><select className="field-input" value={form.aannemer ?? ''} onChange={e => setForm(f => ({ ...f, aannemer: e.target.value }))}><option value="">—</option>{AANNEMERS.map(a => <option key={a}>{a}</option>)}</select></F>
           <F label="Bundel configuratie" span><input className="field-input" value={form.bundel_configuratie ?? ''} placeholder="1x200mm + 1x160mm" onChange={e => setForm(f => ({ ...f, bundel_configuratie: e.target.value }))} /></F>
