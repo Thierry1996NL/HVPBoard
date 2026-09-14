@@ -706,11 +706,23 @@ export default function LemmerPage() {
   const frozenColCount = 2 + (wp === 0 ? 1 : 0) + 1; // meta, #, [project], boor nr
 
   const measureFlexColWidths = useCallback(() => {
-    const firstRow = bodyTableRef.current?.tBodies[0]?.rows[0];
-    if (!firstRow || firstRow.cells.length <= frozenColCount) return;
-    const widths: number[] = [];
-    for (let i = frozenColCount; i < firstRow.cells.length; i++) {
-      widths.push(firstRow.cells[i].getBoundingClientRect().width);
+    // Meet over ALLE zichtbare rijen (niet alleen de eerste) en neem per kolom de
+    // breedste waarde. Met alleen de eerste rij liep de koptabel uit de pas zodra
+    // die rij toevallig een korte/lege waarde had ('—') terwijl andere rijen in
+    // diezelfde kolom een langere waarde hadden — de koptabel (vaste breedte)
+    // werd dan te smal t.o.v. de databody (auto-breedte over alle rijen), met
+    // door elkaar lopende kolomkoppen tot gevolg.
+    const bodyRows = bodyTableRef.current?.tBodies[0]?.rows;
+    if (!bodyRows || bodyRows.length === 0 || bodyRows[0].cells.length <= frozenColCount) return;
+    const colCount = bodyRows[0].cells.length;
+    const widths: number[] = new Array(colCount - frozenColCount).fill(0);
+    for (let r = 0; r < bodyRows.length; r++) {
+      const cells = bodyRows[r].cells;
+      if (cells.length !== colCount) continue;
+      for (let i = frozenColCount; i < colCount; i++) {
+        const w = cells[i].getBoundingClientRect().width;
+        if (w > widths[i - frozenColCount]) widths[i - frozenColCount] = w;
+      }
     }
     setFlexColWidths(widths);
   }, [frozenColCount]);
