@@ -430,24 +430,25 @@ export default function LemmerPage() {
     try { await save(d.id, { startdatum: start, stappen: next }); toast('✓ Planning doorgerekend', 'success'); }
     catch (e) { toast((e as Error).message, 'error'); }
   };
-  const stapDone = (sd: StapData) => sd.afgerond === true || sd.status === 'Gereed';
-
   /* Afgeleide status uit ontwerp % (voor de KPI-kaarten). */
   const rowStatus = (d: LemmerBoring) =>
     d.vervallen ? 'vervallen' : d.ontwerp_pct === 1 ? 'gereed' : (d.ontwerp_pct ?? 0) > 0 ? 'loopt' : 'niet';
-  /* Stoplicht-status op basis van de substap-deadlines:
-     rood = een openstaande stap is over datum, geel = deadline binnen 4 weken, anders groen. */
+  /* Stoplicht-status op basis van de Einddatum (auto) t.o.v. vandaag:
+     rood = einddatum al verstreken, geel = einddatum binnen 2 weken, anders groen.
+     (14 sep 2026: vereenvoudigd van per-stap-deadlines naar alleen de einddatum. Sinds het
+     stappenpaneel uit de UI is (zie Wijziging 4), kan niemand een tussenliggende stap meer
+     afronden — zo'n boring bleef daardoor permanent rood staan op een gepasseerde tussenstap,
+     ook als de einddatum zelf nog ver weg was. Nu telt alleen de einddatum zelf mee, dezelfde
+     datum die ook in de kolom 'Einddatum (auto)' te zien is.) */
   const boringHealth = (d: LemmerBoring): 'groen' | 'geel' | 'rood' => {
     if (d.gereed) return 'groen';
-    let geel = false;
-    for (const s of ALLE_STAPPEN) {
-      const sd = getStap(d, s.id);
-      if (stapDone(sd) || sd.status === 'N.v.t.' || !sd.deadline) continue;
-      const wk = (new Date(sd.deadline).getTime() - Date.now()) / MS_WEEK;
-      if (wk < 0) return 'rood';
-      if (wk <= 2) geel = true;
-    }
-    return geel ? 'geel' : 'groen';
+    const deadlines = ALLE_STAPPEN.map(s => getStap(d, s.id).deadline).filter(Boolean) as string[];
+    const e = deadlines.length ? deadlines.reduce((a, b) => (a > b ? a : b)) : einddatumVan(d.startdatum);
+    if (!e) return 'groen';
+    const wk = (new Date(e).getTime() - Date.now()) / MS_WEEK;
+    if (wk < 0) return 'rood';
+    if (wk <= 2) return 'geel';
+    return 'groen';
   };
   /* Tekstwaarde per kolom om op te filteren — werkt ook voor berekende kolommen. */
   const colFilterValue = (d: LemmerBoring, id: ColId): string => {
