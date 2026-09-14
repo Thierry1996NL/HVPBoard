@@ -168,6 +168,17 @@ interface LemmerBoring {
   gereed?: boolean;
   startdatum?: string;
   einddatum?: string;
+  vergunning_status?: string;
+  vergunning_toestemmingen?: string;
+  vergunning_deadline_vooroverleg?: string;
+  vergunning_deadline_bespreekpunten?: string;
+  vergunning_deadline_aanvraag?: string;
+  vergunning_deadline_definitief?: string;
+  boorplan?: string;
+  vitens?: string;
+  raakvlak_bomen?: string;
+  afgeleide_eisen?: boolean;
+  opmerking_ontwerptechnisch?: string;
   stappen?: Record<string, StapData>;
 }
 
@@ -248,7 +259,10 @@ type ColId =
   | 'aanlevering_compleet' | 'datum_gereed' | 'ter_controle_uitvoering' | 'retour_uitvoering' | 'schouw_uitgevoerd'
   | 'opmerkingen_uitvoering' | 'planning_apds' | 'ontwerp_pct' | 'tek_pct' | 'status_werkterrein'
   | 'status_berekening' | 'proefsleuf_nr' | 'sondering_nr' | 'sondering_aangevraagd' | 'sondering_retour'
-  | 'bundel_configuratie' | 'raakvlak' | 'opmerking_extra' | 'case_nr' | 'gereed' | 'project' | 'voorstel';
+  | 'bundel_configuratie' | 'raakvlak' | 'opmerking_extra' | 'case_nr' | 'gereed' | 'project' | 'voorstel'
+  | 'vergunning_status' | 'vergunning_toestemmingen' | 'vergunning_deadline_vooroverleg'
+  | 'vergunning_deadline_bespreekpunten' | 'vergunning_deadline_aanvraag' | 'vergunning_deadline_definitief'
+  | 'boorplan' | 'vitens' | 'raakvlak_bomen' | 'afgeleide_eisen' | 'opmerking_ontwerptechnisch';
 
 /* Volgorde 1 t/m 18 komt exact overeen met het oorspronkelijke Excel-dashboard
    (Dashboard_HDD_V2.0) — dat is nu ook de standaard-weergave. Alles daarna zijn
@@ -259,6 +273,9 @@ const DEFAULT_COL_ORDER: ColId[] = [
   'oplevering_toolgate', 'planning_apds', 'status_ontwerp', 'tek_pct', 'status_werkterrein', 'status_berekening',
   'proefsleuf_nr', 'sondering_nr', 'bundel_configuratie', 'opmerking_extra',
   'prioritering', 'projectfase', 'engineeringsfase',
+  'vergunning_status', 'vergunning_toestemmingen', 'vergunning_deadline_vooroverleg',
+  'vergunning_deadline_bespreekpunten', 'vergunning_deadline_aanvraag', 'vergunning_deadline_definitief',
+  'boorplan', 'vitens', 'raakvlak_bomen', 'afgeleide_eisen', 'opmerking_ontwerptechnisch',
   'startdatum', 'eind_weken',
   'aanlevering_compleet', 'datum_gereed', 'ter_controle_uitvoering', 'retour_uitvoering', 'schouw_uitgevoerd',
   'opmerkingen_uitvoering', 'ontwerp_pct', 'sondering_aangevraagd', 'sondering_retour',
@@ -271,13 +288,16 @@ const DEFAULT_COL_ORDER: ColId[] = [
 /* Standaard verborgen kolommen (compacte weergave) — toonbaar via de kolomkiezer of de knop Uitklappen. */
 const DEFAULT_HIDDEN: ColId[] = [
   'prioritering', 'projectfase', 'engineeringsfase',
+  'vergunning_status', 'vergunning_toestemmingen', 'vergunning_deadline_vooroverleg',
+  'vergunning_deadline_bespreekpunten', 'vergunning_deadline_aanvraag', 'vergunning_deadline_definitief',
+  'boorplan', 'vitens', 'raakvlak_bomen', 'afgeleide_eisen', 'opmerking_ontwerptechnisch',
   'startdatum', 'eind_weken',
   'aanlevering_compleet', 'datum_gereed', 'ter_controle_uitvoering', 'retour_uitvoering', 'schouw_uitgevoerd',
   'opmerkingen_uitvoering', 'ontwerp_pct', 'sondering_aangevraagd', 'sondering_retour',
   'raakvlak',
 ];
-const COL_ORDER_KEY = 'hvp_lemmer_colorder_v15';
-const HIDDEN_KEY = 'hvp_lemmer_hidden_v10';
+const COL_ORDER_KEY = 'hvp_lemmer_colorder_v16';
+const HIDDEN_KEY = 'hvp_lemmer_hidden_v11';
 /* Berekende kolommen zonder eigen databaseveld — niet filterbaar via de header. */
 const NIET_FILTERBAAR: ColId[] = [];
 
@@ -586,6 +606,20 @@ export default function LemmerPage() {
         onSave={v => saveField(d.id, { [key]: v } as Partial<LemmerBoring>)} />
     ),
   });
+  /* Ja/Nee-knop, zelfde patroon als de bestaande 'Gereed'-kolom. */
+  const boolCol = (label: string, key: keyof LemmerBoring): { label: string; sortKey?: keyof LemmerBoring; cell: (d: LemmerBoring) => React.ReactNode } => ({
+    label, sortKey: key,
+    cell: d => (
+      <td style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+        <button className="btn" onClick={() => saveField(d.id, { [key]: !d[key] } as Partial<LemmerBoring>)}
+          title={d[key] ? 'Klik om op Nee te zetten' : 'Klik om op Ja te zetten'}
+          style={{ fontSize: 11, padding: '2px 12px', fontWeight: 600,
+            ...(d[key] ? { background: 'var(--g-bg)', color: 'var(--g-fg)', borderColor: 'var(--g-mid)' } : {}) }}>
+          {d[key] ? '✓ Ja' : 'Nee'}
+        </button>
+      </td>
+    ),
+  });
 
   /* Weken-chip: kleur op basis van de ECHTE datum. Deadline vandaag of voorbij = rood. */
   const wkChip = (deadline?: string | null): React.ReactNode => {
@@ -635,6 +669,17 @@ export default function LemmerPage() {
     status_ontwerp: statusCol('HDD Ontwerp', 'status_ontwerp', ONTWERP_STATUSSEN),
     projectfase: textCol('Projectfase', 'projectfase'),
     engineeringsfase: textCol('Engineeringsfase', 'engineeringsfase', { wide: true }),
+    vergunning_status: textCol('Status vergunning', 'vergunning_status'),
+    vergunning_toestemmingen: textCol('Toestemmingen (naast gemeente/provincie)', 'vergunning_toestemmingen', { wide: true }),
+    vergunning_deadline_vooroverleg: dateCol('Deadline vooroverleg', 'vergunning_deadline_vooroverleg'),
+    vergunning_deadline_bespreekpunten: dateCol('Deadline bespreekpunten vooroverleg', 'vergunning_deadline_bespreekpunten'),
+    vergunning_deadline_aanvraag: dateCol('Deadline aanvraag vergunning', 'vergunning_deadline_aanvraag'),
+    vergunning_deadline_definitief: dateCol('Deadline definitief', 'vergunning_deadline_definitief'),
+    boorplan: textCol('Boorplan', 'boorplan'),
+    vitens: textCol('VITENS', 'vitens'),
+    raakvlak_bomen: textCol('Raakvlak bomen / boomeffectanalyse', 'raakvlak_bomen', { wide: true }),
+    afgeleide_eisen: boolCol('Afgeleide eisen?', 'afgeleide_eisen'),
+    opmerking_ontwerptechnisch: textCol('Opmerking ontwerptechnisch', 'opmerking_ontwerptechnisch', { wide: true }),
     startdatum: { label: 'Startdatum', sortKey: 'startdatum', cell: d => (
       <InlineCell type="date" value={d.startdatum}
         display={<span style={{ fontSize: 11, color: 'var(--text-3)', whiteSpace: 'nowrap' }}>{fmtDate(d.startdatum)}</span>}
@@ -1054,14 +1099,26 @@ export default function LemmerPage() {
             <F label="Werkterrein"><select className="field-input" value={form.status_werkterrein ?? ''} onChange={e => setForm(f => ({ ...f, status_werkterrein: e.target.value }))}><option value="">—</option>{STATUSSEN.map(s => <option key={s}>{s}</option>)}</select></F>
             <F label="Berekening"><select className="field-input" value={form.status_berekening ?? ''} onChange={e => setForm(f => ({ ...f, status_berekening: e.target.value }))}><option value="">—</option>{STATUSSEN.map(s => <option key={s}>{s}</option>)}</select></F>
             <div style={{ gridColumn: '1/-1', height: '0.5px', background: 'var(--border)' }} />
+            <F label="Status vergunning"><input className="field-input" value={form.vergunning_status ?? ''} onChange={e => setForm(f => ({ ...f, vergunning_status: e.target.value }))} /></F>
+            <F label="Toestemmingen (naast gemeente/provincie)"><input className="field-input" value={form.vergunning_toestemmingen ?? ''} onChange={e => setForm(f => ({ ...f, vergunning_toestemmingen: e.target.value }))} /></F>
+            <F label="Deadline vooroverleg"><DateInput value={form.vergunning_deadline_vooroverleg} onChange={v => setForm(f => ({ ...f, vergunning_deadline_vooroverleg: v }))} /></F>
+            <F label="Deadline bespreekpunten vooroverleg"><DateInput value={form.vergunning_deadline_bespreekpunten} onChange={v => setForm(f => ({ ...f, vergunning_deadline_bespreekpunten: v }))} /></F>
+            <F label="Deadline aanvraag vergunning"><DateInput value={form.vergunning_deadline_aanvraag} onChange={v => setForm(f => ({ ...f, vergunning_deadline_aanvraag: v }))} /></F>
+            <F label="Deadline definitief"><DateInput value={form.vergunning_deadline_definitief} onChange={v => setForm(f => ({ ...f, vergunning_deadline_definitief: v }))} /></F>
+            <div style={{ gridColumn: '1/-1', height: '0.5px', background: 'var(--border)' }} />
             <F label="Proefsleuf nr."><input className="field-input" value={form.proefsleuf_nr ?? ''} onChange={e => setForm(f => ({ ...f, proefsleuf_nr: e.target.value }))} /></F>
             <F label="Sondering nr."><input className="field-input" value={form.sondering_nr ?? ''} onChange={e => setForm(f => ({ ...f, sondering_nr: e.target.value }))} /></F>
             <F label="Sondering aangevraagd"><input className="field-input" value={form.sondering_aangevraagd ?? ''} onChange={e => setForm(f => ({ ...f, sondering_aangevraagd: e.target.value }))} /></F>
             <F label="Sondering retour"><input className="field-input" value={form.sondering_retour ?? ''} onChange={e => setForm(f => ({ ...f, sondering_retour: e.target.value }))} /></F>
             <F label="Bundel configuratie"><input className="field-input" value={form.bundel_configuratie ?? ''} onChange={e => setForm(f => ({ ...f, bundel_configuratie: e.target.value }))} /></F>
+            <F label="Boorplan"><input className="field-input" value={form.boorplan ?? ''} onChange={e => setForm(f => ({ ...f, boorplan: e.target.value }))} /></F>
+            <F label="VITENS"><input className="field-input" value={form.vitens ?? ''} onChange={e => setForm(f => ({ ...f, vitens: e.target.value }))} /></F>
+            <F label="Raakvlak bomen / boomeffectanalyse"><input className="field-input" value={form.raakvlak_bomen ?? ''} onChange={e => setForm(f => ({ ...f, raakvlak_bomen: e.target.value }))} /></F>
+            <F label="Afgeleide eisen?"><label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginTop: 6 }}><input type="checkbox" checked={form.afgeleide_eisen ?? false} onChange={e => setForm(f => ({ ...f, afgeleide_eisen: e.target.checked }))} style={{ width: 15, height: 15 }} /><span style={{ fontSize: 12 }}>Ja</span></label></F>
             <F label="Vervallen"><label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginTop: 6 }}><input type="checkbox" checked={form.vervallen ?? false} onChange={e => setForm(f => ({ ...f, vervallen: e.target.checked }))} style={{ width: 15, height: 15 }} /><span style={{ fontSize: 12 }}>Ja, vervallen</span></label></F>
             <F label="Project gereed"><label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginTop: 6 }}><input type="checkbox" checked={form.gereed ?? false} onChange={e => setForm(f => ({ ...f, gereed: e.target.checked }))} style={{ width: 15, height: 15 }} /><span style={{ fontSize: 12 }}>Ja, gereed</span></label></F>
             <F label="Raakvlak" span><textarea className="field-input" rows={2} value={form.raakvlak ?? ''} onChange={e => setForm(f => ({ ...f, raakvlak: e.target.value }))} style={{ resize: 'vertical' }} /></F>
+            <F label="Opmerking ontwerptechnisch" span><textarea className="field-input" rows={2} value={form.opmerking_ontwerptechnisch ?? ''} onChange={e => setForm(f => ({ ...f, opmerking_ontwerptechnisch: e.target.value }))} style={{ resize: 'vertical' }} /></F>
             <F label="Opmerkingen" span><textarea className="field-input" rows={2} value={form.opmerking_extra ?? ''} onChange={e => setForm(f => ({ ...f, opmerking_extra: e.target.value }))} style={{ resize: 'vertical' }} /></F>
           </div>
         </Modal>
@@ -1141,6 +1198,12 @@ const BORINGEN_COLS = new Set<string>([
   'retour_uitvoering', 'opmerkingen_uitvoering', 'schouw_uitgevoerd', 'ontwerp_pct',
   'sondering_aangevraagd', 'sondering_retour', 'raakvlak',
   'datum_gereed',
+  /* 14 sep 2026: uit tabblad 'Documentenlijst' van de Excel-bron — vergunningen-tracking en
+     extra ontwerptechnische velden, nog geen kolom in Supabase (zie SQL-migratie in het
+     projectdocument). */
+  'vergunning_status', 'vergunning_toestemmingen', 'vergunning_deadline_vooroverleg',
+  'vergunning_deadline_bespreekpunten', 'vergunning_deadline_aanvraag', 'vergunning_deadline_definitief',
+  'boorplan', 'vitens', 'raakvlak_bomen', 'afgeleide_eisen', 'opmerking_ontwerptechnisch',
 ]);
 function fromDb(row: Record<string, unknown>): LemmerBoring {
   return {
