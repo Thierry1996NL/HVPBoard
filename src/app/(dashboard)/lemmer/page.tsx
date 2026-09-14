@@ -452,6 +452,7 @@ export default function LemmerPage() {
   /* Tekstwaarde per kolom om op te filteren — werkt ook voor berekende kolommen. */
   const colFilterValue = (d: LemmerBoring, id: ColId): string => {
     if (id === 'project') return PROJECTEN.find(p => p.wp === d.werkpakket_id)?.naam ?? '';
+    if (id === 'case_nr') return PROJECTEN.find(p => p.wp === d.werkpakket_id)?.case ?? '';
     if (id === 'gereed') return d.gereed ? 'ja' : 'nee';
     if (id === 'einddatum' || id === 'eind_weken') {
       const deadlines = ALLE_STAPPEN.map(s => getStap(d, s.id).deadline).filter(Boolean) as string[];
@@ -662,7 +663,11 @@ export default function LemmerPage() {
         {d.opmerking_extra || '—'}
       </td>
     ) },
-    case_nr: textCol('Case nr.', 'case_nr'),
+    case_nr: { label: 'Case nr.', cell: d => (
+      <td style={{ whiteSpace: 'nowrap', color: 'var(--text-2)' }}>
+        {PROJECTEN.find(p => p.wp === d.werkpakket_id)?.case ?? '—'}
+      </td>
+    ) },
     project: { label: 'Project', cell: d => (
       <td style={{ whiteSpace: 'nowrap', color: 'var(--text-2)', fontWeight: 600 }}>
         {PROJECTEN.find(p => p.wp === d.werkpakket_id)?.naam ?? '—'}
@@ -1036,7 +1041,6 @@ export default function LemmerPage() {
             <F label="Sondering aangevraagd"><input className="field-input" value={form.sondering_aangevraagd ?? ''} onChange={e => setForm(f => ({ ...f, sondering_aangevraagd: e.target.value }))} /></F>
             <F label="Sondering retour"><input className="field-input" value={form.sondering_retour ?? ''} onChange={e => setForm(f => ({ ...f, sondering_retour: e.target.value }))} /></F>
             <F label="Bundel configuratie"><input className="field-input" value={form.bundel_configuratie ?? ''} onChange={e => setForm(f => ({ ...f, bundel_configuratie: e.target.value }))} /></F>
-            <F label="Case nr."><input className="field-input" value={form.case_nr ?? ''} onChange={e => setForm(f => ({ ...f, case_nr: e.target.value }))} /></F>
             <F label="Vervallen"><label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginTop: 6 }}><input type="checkbox" checked={form.vervallen ?? false} onChange={e => setForm(f => ({ ...f, vervallen: e.target.checked }))} style={{ width: 15, height: 15 }} /><span style={{ fontSize: 12 }}>Ja, vervallen</span></label></F>
             <F label="Project gereed"><label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginTop: 6 }}><input type="checkbox" checked={form.gereed ?? false} onChange={e => setForm(f => ({ ...f, gereed: e.target.checked }))} style={{ width: 15, height: 15 }} /><span style={{ fontSize: 12 }}>Ja, gereed</span></label></F>
             <F label="Raakvlak" span><textarea className="field-input" rows={2} value={form.raakvlak ?? ''} onChange={e => setForm(f => ({ ...f, raakvlak: e.target.value }))} style={{ resize: 'vertical' }} /></F>
