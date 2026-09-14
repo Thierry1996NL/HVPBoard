@@ -144,6 +144,7 @@ interface LemmerBoring {
   prioritering?: string;
   oplevering_toolgate?: string;
   aanlevering_compleet?: string;
+  datum_gereed?: string;
   ter_controle_uitvoering?: string;
   retour_uitvoering?: string;
   opmerkingen_uitvoering?: string;
@@ -241,7 +242,7 @@ type ColId =
   | 'boring_nr' | 'werkpakket_nr' | 'locatie' | 'lengte_m' | 'type_boring' | 'aannemer' | 'klasse'
   | 'prioritering' | 'oplevering_toolgate' | 'projectfase' | 'engineeringsfase'
   | 'startdatum' | 'fase0' | 'faseG' | 'fase1' | 'fase2' | 'einddatum' | 'eind_weken' | 'actieve_stap' | 'actieve_eigenaar'
-  | 'aanlevering_compleet' | 'ter_controle_uitvoering' | 'retour_uitvoering' | 'schouw_uitgevoerd'
+  | 'aanlevering_compleet' | 'datum_gereed' | 'ter_controle_uitvoering' | 'retour_uitvoering' | 'schouw_uitgevoerd'
   | 'opmerkingen_uitvoering' | 'planning_apds' | 'ontwerp_pct' | 'tek_pct' | 'status_werkterrein'
   | 'status_berekening' | 'sondering_nr' | 'sondering_aangevraagd' | 'sondering_retour'
   | 'bundel_configuratie' | 'raakvlak' | 'opmerking_extra' | 'case_nr' | 'gereed' | 'project' | 'voorstel';
@@ -250,7 +251,7 @@ const DEFAULT_COL_ORDER: ColId[] = [
   'boring_nr', 'werkpakket_nr', 'locatie', 'lengte_m', 'type_boring', 'klasse', 'aannemer',
   'prioritering', 'oplevering_toolgate', 'projectfase', 'engineeringsfase',
   'startdatum', 'fase0', 'faseG', 'fase1', 'fase2', 'eind_weken', 'einddatum', 'planning_apds', 'actieve_stap', 'actieve_eigenaar', 'opmerking_extra',
-  'aanlevering_compleet', 'ter_controle_uitvoering', 'retour_uitvoering', 'schouw_uitgevoerd',
+  'aanlevering_compleet', 'datum_gereed', 'ter_controle_uitvoering', 'retour_uitvoering', 'schouw_uitgevoerd',
   'opmerkingen_uitvoering', 'ontwerp_pct', 'tek_pct', 'status_werkterrein',
   'status_berekening', 'sondering_nr', 'sondering_aangevraagd', 'sondering_retour',
   'bundel_configuratie', 'raakvlak', 'case_nr', 'gereed',
@@ -258,7 +259,7 @@ const DEFAULT_COL_ORDER: ColId[] = [
 /* Standaard verborgen kolommen (compacte weergave) — toonbaar via de kolomkiezer of de knop Uitklappen. */
 const DEFAULT_HIDDEN: ColId[] = [
   'oplevering_toolgate', 'projectfase', 'engineeringsfase',
-  'aanlevering_compleet', 'ter_controle_uitvoering', 'retour_uitvoering', 'schouw_uitgevoerd',
+  'aanlevering_compleet', 'datum_gereed', 'ter_controle_uitvoering', 'retour_uitvoering', 'schouw_uitgevoerd',
   'opmerkingen_uitvoering', 'ontwerp_pct', 'tek_pct', 'status_werkterrein',
   'status_berekening', 'sondering_nr', 'sondering_aangevraagd', 'sondering_retour',
   'raakvlak', 'case_nr', 'bundel_configuratie',
@@ -702,6 +703,7 @@ export default function LemmerPage() {
       return <td style={{ whiteSpace: 'nowrap', color: 'var(--text-2)' }}>{a?.sd.eigenaar || '—'}</td>;
     } },
     aanlevering_compleet: dateCol('Aanlevering compleet', 'aanlevering_compleet'),
+    datum_gereed: dateCol('Datum gereed (verwacht)', 'datum_gereed'),
     ter_controle_uitvoering: dateCol('Ter controle uitvoering', 'ter_controle_uitvoering'),
     retour_uitvoering: dateCol('Retour ontvangen', 'retour_uitvoering'),
     schouw_uitgevoerd: dateCol('Schouw uitgevoerd', 'schouw_uitgevoerd'),
@@ -1176,6 +1178,7 @@ export default function LemmerPage() {
             <F label="Startdatum"><DateInput value={form.startdatum} onChange={v => setForm(f => ({ ...f, startdatum: v }))} /></F>
             <div style={{ gridColumn: '1/-1', height: '0.5px', background: 'var(--border)' }} />
             <F label="Aanlevering compleet"><DateInput value={form.aanlevering_compleet} onChange={v => setForm(f => ({ ...f, aanlevering_compleet: v }))} /></F>
+            <F label="Datum gereed (verwacht)"><DateInput value={form.datum_gereed} onChange={v => setForm(f => ({ ...f, datum_gereed: v }))} /></F>
             <F label="Ter controle uitvoering"><DateInput value={form.ter_controle_uitvoering} onChange={v => setForm(f => ({ ...f, ter_controle_uitvoering: v }))} /></F>
             <F label="Retour ontvangen"><DateInput value={form.retour_uitvoering} onChange={v => setForm(f => ({ ...f, retour_uitvoering: v }))} /></F>
             <F label="Schouw uitgevoerd"><DateInput value={form.schouw_uitgevoerd} onChange={v => setForm(f => ({ ...f, schouw_uitgevoerd: v }))} /></F>
@@ -1267,6 +1270,12 @@ const BORINGEN_COLS = new Set<string>([
   'status_werkterrein', 'status_berekening', 'proefsleuf_nr', 'sondering_nr', 'bundel_configuratie',
   'prioritering', 'vervallen', 'intake_compleet', 'startdatum_engineering', 'deadline_engineering',
   'engineering_afgerond', 'stappen',
+  /* Onderstaande stonden al als bewerkbaar veld in het formulier maar ontbraken hier,
+     waardoor wijzigingen wel leken op te slaan maar nooit in Supabase belandden. */
+  'case_nr', 'projectfase', 'engineeringsfase', 'aanlevering_compleet', 'ter_controle_uitvoering',
+  'retour_uitvoering', 'opmerkingen_uitvoering', 'schouw_uitgevoerd', 'ontwerp_pct',
+  'sondering_aangevraagd', 'sondering_retour', 'raakvlak',
+  'datum_gereed',
 ]);
 function fromDb(row: Record<string, unknown>): LemmerBoring {
   return {
