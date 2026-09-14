@@ -258,21 +258,24 @@ const DEFAULT_COL_ORDER: ColId[] = [
   'oplevering_toolgate', 'planning_apds', 'status_ontwerp', 'tek_pct', 'status_werkterrein', 'status_berekening',
   'proefsleuf_nr', 'sondering_nr', 'bundel_configuratie', 'opmerking_extra',
   'prioritering', 'projectfase', 'engineeringsfase',
-  'startdatum', 'eind_weken', 'einddatum',
+  'startdatum', 'eind_weken',
   'aanlevering_compleet', 'datum_gereed', 'ter_controle_uitvoering', 'retour_uitvoering', 'schouw_uitgevoerd',
   'opmerkingen_uitvoering', 'ontwerp_pct', 'sondering_aangevraagd', 'sondering_retour',
   'raakvlak', 'gereed',
+  /* Helemaal rechts: bepaalt de rood/geel/groen-status (zie boringHealth), daarom altijd zichtbaar
+     en als laatste kolom, i.p.v. tussen de andere datumvelden. */
+  'einddatum',
 ];
 /* Standaard verborgen kolommen (compacte weergave) — toonbaar via de kolomkiezer of de knop Uitklappen. */
 const DEFAULT_HIDDEN: ColId[] = [
   'prioritering', 'projectfase', 'engineeringsfase',
-  'startdatum', 'eind_weken', 'einddatum',
+  'startdatum', 'eind_weken',
   'aanlevering_compleet', 'datum_gereed', 'ter_controle_uitvoering', 'retour_uitvoering', 'schouw_uitgevoerd',
   'opmerkingen_uitvoering', 'ontwerp_pct', 'sondering_aangevraagd', 'sondering_retour',
   'raakvlak', 'gereed',
 ];
-const COL_ORDER_KEY = 'hvp_lemmer_colorder_v13';
-const HIDDEN_KEY = 'hvp_lemmer_hidden_v8';
+const COL_ORDER_KEY = 'hvp_lemmer_colorder_v14';
+const HIDDEN_KEY = 'hvp_lemmer_hidden_v9';
 /* Berekende kolommen zonder eigen databaseveld — niet filterbaar via de header. */
 const NIET_FILTERBAAR: ColId[] = [];
 
@@ -628,7 +631,7 @@ export default function LemmerPage() {
         display={<span style={{ fontSize: 11, color: 'var(--text-3)', whiteSpace: 'nowrap' }}>{fmtDate(d.startdatum)}</span>}
         onSave={v => setStartEnPlanning(d, (v as string | undefined) || undefined)} />
     ) },
-    einddatum: { label: 'Einddatum (auto)', cell: d => {
+    einddatum: { label: 'Definitief gereed', cell: d => {
       const deadlines = ALLE_STAPPEN.map(s => getStap(d, s.id).deadline).filter(Boolean) as string[];
       const e = deadlines.length ? deadlines.reduce((a, b) => (a > b ? a : b)) : einddatumVan(d.startdatum);
       return <td style={{ fontSize: 11, whiteSpace: 'nowrap', color: e ? 'var(--text-2)' : 'var(--text-4)', fontWeight: e ? 500 : 400 }}
