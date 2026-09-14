@@ -1,3 +1,4 @@
+/* VERVALLEN (14 sep 2026): deze pagina is niet meer gekoppeld aan de navigatie (de echte, actieve Boringen-pagina is src/app/(dashboard)/lemmer/page.tsx). Route is buiten gebruik gezet door de map met een underscore-prefix te hernoemen, zodat Next.js 'm niet meer als /boringen serveert. Code + historie bewust bewaard, niet verwijderd. */
 'use client';
 
 import { useState, useMemo } from 'react';
