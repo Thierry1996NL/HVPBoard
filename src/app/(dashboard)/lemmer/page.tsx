@@ -143,6 +143,7 @@ interface LemmerBoring {
   klasse?: string;
   prioritering?: string;
   oplevering_toolgate?: string;
+  status_ontwerp?: string;
   aanlevering_compleet?: string;
   datum_gereed?: string;
   ter_controle_uitvoering?: string;
@@ -154,6 +155,7 @@ interface LemmerBoring {
   ontwerp_pct?: number;
   status_werkterrein?: string;
   status_berekening?: string;
+  proefsleuf_nr?: string;
   sondering_nr?: string;
   sondering_aangevraagd?: string;
   sondering_retour?: string;
@@ -173,6 +175,8 @@ const TYPES_BORING = ['Gyro', 'Walk-over', 'Walkover', 'Nanodrill', 'Nano-Drill'
 const KLASSEN      = ['9T', '17T', '27T', '50T', '>50T', '120T'];
 const AANNEMERS    = ['Heijmans', 'Heijmans DTE', 'Voskuilen', 'Voskuilen / Heijmans', 'Pol', 'Anders'];
 const STATUSSEN    = ['Niet gestart', 'Gestart', 'Ter controle', 'Goedgekeurd', 'Vrijgegeven', 'Voldoet', 'N.v.t.', 'Vervallen'];
+/* Statussen voor 'HDD Ontwerp' — zelfde set als het oorspronkelijke Excel-dashboard (zie STATUS_COLORS-legenda). */
+const ONTWERP_STATUSSEN = ['Niet gestart', 'Gestart', 'Ter controle', 'Afgekeurd', 'Goedgekeurd', 'Vrijgegeven', 'Issue', 'Vervallen'];
 const PCT_OPTS: InlineOpt[] = [
   { value: '', label: '—' }, { value: 0, label: '0%' }, { value: 0.25, label: '25%' },
   { value: 0.4, label: '40%' }, { value: 0.5, label: '50%' }, { value: 0.75, label: '75%' }, { value: 1, label: '100%' },
@@ -240,32 +244,37 @@ type Persoon = { id: string; naam: string };
 /* ── Kolommen (versleepbaar) ──────────────────────────────────────────────── */
 type ColId =
   | 'boring_nr' | 'werkpakket_nr' | 'locatie' | 'lengte_m' | 'type_boring' | 'aannemer' | 'klasse'
-  | 'prioritering' | 'oplevering_toolgate' | 'projectfase' | 'engineeringsfase'
+  | 'prioritering' | 'oplevering_toolgate' | 'status_ontwerp' | 'projectfase' | 'engineeringsfase'
   | 'startdatum' | 'fase0' | 'faseG' | 'fase1' | 'fase2' | 'einddatum' | 'eind_weken' | 'actieve_stap' | 'actieve_eigenaar'
   | 'aanlevering_compleet' | 'datum_gereed' | 'ter_controle_uitvoering' | 'retour_uitvoering' | 'schouw_uitgevoerd'
   | 'opmerkingen_uitvoering' | 'planning_apds' | 'ontwerp_pct' | 'tek_pct' | 'status_werkterrein'
-  | 'status_berekening' | 'sondering_nr' | 'sondering_aangevraagd' | 'sondering_retour'
+  | 'status_berekening' | 'proefsleuf_nr' | 'sondering_nr' | 'sondering_aangevraagd' | 'sondering_retour'
   | 'bundel_configuratie' | 'raakvlak' | 'opmerking_extra' | 'case_nr' | 'gereed' | 'project' | 'voorstel';
 
+/* Volgorde 1 t/m 18 komt exact overeen met het oorspronkelijke Excel-dashboard
+   (Dashboard_HDD_V2.0) — dat is nu ook de standaard-weergave. Alles daarna zijn
+   latere toevoegingen (stappen-planning, uitvoering, etc.) die standaard verborgen
+   staan (zie DEFAULT_HIDDEN) maar via de kolomkiezer of 'Uitklappen' bereikbaar blijven. */
 const DEFAULT_COL_ORDER: ColId[] = [
-  'boring_nr', 'werkpakket_nr', 'locatie', 'lengte_m', 'type_boring', 'klasse', 'aannemer',
-  'prioritering', 'oplevering_toolgate', 'projectfase', 'engineeringsfase',
-  'startdatum', 'fase0', 'faseG', 'fase1', 'fase2', 'eind_weken', 'einddatum', 'planning_apds', 'actieve_stap', 'actieve_eigenaar', 'opmerking_extra',
+  'case_nr', 'boring_nr', 'werkpakket_nr', 'locatie', 'lengte_m', 'type_boring', 'aannemer', 'klasse',
+  'oplevering_toolgate', 'planning_apds', 'status_ontwerp', 'tek_pct', 'status_werkterrein', 'status_berekening',
+  'proefsleuf_nr', 'sondering_nr', 'bundel_configuratie', 'opmerking_extra',
+  'prioritering', 'projectfase', 'engineeringsfase',
+  'startdatum', 'fase0', 'faseG', 'fase1', 'fase2', 'eind_weken', 'einddatum', 'actieve_stap', 'actieve_eigenaar',
   'aanlevering_compleet', 'datum_gereed', 'ter_controle_uitvoering', 'retour_uitvoering', 'schouw_uitgevoerd',
-  'opmerkingen_uitvoering', 'ontwerp_pct', 'tek_pct', 'status_werkterrein',
-  'status_berekening', 'sondering_nr', 'sondering_aangevraagd', 'sondering_retour',
-  'bundel_configuratie', 'raakvlak', 'case_nr', 'gereed',
+  'opmerkingen_uitvoering', 'ontwerp_pct', 'sondering_aangevraagd', 'sondering_retour',
+  'raakvlak', 'gereed',
 ];
 /* Standaard verborgen kolommen (compacte weergave) — toonbaar via de kolomkiezer of de knop Uitklappen. */
 const DEFAULT_HIDDEN: ColId[] = [
-  'oplevering_toolgate', 'projectfase', 'engineeringsfase',
+  'prioritering', 'projectfase', 'engineeringsfase',
+  'startdatum', 'fase0', 'faseG', 'fase1', 'fase2', 'eind_weken', 'einddatum', 'actieve_stap', 'actieve_eigenaar',
   'aanlevering_compleet', 'datum_gereed', 'ter_controle_uitvoering', 'retour_uitvoering', 'schouw_uitgevoerd',
-  'opmerkingen_uitvoering', 'ontwerp_pct', 'tek_pct', 'status_werkterrein',
-  'status_berekening', 'sondering_nr', 'sondering_aangevraagd', 'sondering_retour',
-  'raakvlak', 'case_nr', 'bundel_configuratie',
+  'opmerkingen_uitvoering', 'ontwerp_pct', 'sondering_aangevraagd', 'sondering_retour',
+  'raakvlak', 'gereed',
 ];
-const COL_ORDER_KEY = 'hvp_lemmer_colorder_v12';
-const HIDDEN_KEY = 'hvp_lemmer_hidden_v7';
+const COL_ORDER_KEY = 'hvp_lemmer_colorder_v13';
+const HIDDEN_KEY = 'hvp_lemmer_hidden_v8';
 /* Koppeling fase-kolom → index in PROCES_FASEN */
 const FASE_COL: Record<string, number> = { fase0: 0, faseG: 1, fase1: 2, fase2: 3 };
 /* Berekende kolommen zonder eigen databaseveld — niet filterbaar via de header. */
@@ -567,10 +576,10 @@ export default function LemmerPage() {
         onSave={v => saveField(d.id, { [key]: v } as Partial<LemmerBoring>)} />
     ),
   });
-  const statusCol = (label: string, key: keyof LemmerBoring): { label: string; sortKey?: keyof LemmerBoring; cell: (d: LemmerBoring) => React.ReactNode } => ({
+  const statusCol = (label: string, key: keyof LemmerBoring, opties: string[] = STATUSSEN): { label: string; sortKey?: keyof LemmerBoring; cell: (d: LemmerBoring) => React.ReactNode } => ({
     label, sortKey: key,
     cell: d => (
-      <InlineCell type="select" value={d[key] as string | undefined} options={toOpts(STATUSSEN)}
+      <InlineCell type="select" value={d[key] as string | undefined} options={toOpts(opties)}
         display={statusPill(d[key] as string | undefined)}
         onSave={v => saveField(d.id, { [key]: v } as Partial<LemmerBoring>)} />
     ),
@@ -655,6 +664,7 @@ export default function LemmerPage() {
     ) },
     prioritering: textCol('Prioritering', 'prioritering'),
     oplevering_toolgate: textCol('Oplevering Toolgate', 'oplevering_toolgate', { wide: true }),
+    status_ontwerp: statusCol('HDD Ontwerp', 'status_ontwerp', ONTWERP_STATUSSEN),
     projectfase: textCol('Projectfase', 'projectfase'),
     engineeringsfase: textCol('Engineeringsfase', 'engineeringsfase', { wide: true }),
     startdatum: { label: 'Startdatum', sortKey: 'startdatum', cell: d => (
@@ -712,6 +722,7 @@ export default function LemmerPage() {
     tek_pct: pctCol('Tek %', 'tek_pct'),
     status_werkterrein: statusCol('Werkterrein', 'status_werkterrein'),
     status_berekening: statusCol('Berekening', 'status_berekening'),
+    proefsleuf_nr: textCol('Proefsleuf nr.', 'proefsleuf_nr'),
     sondering_nr: textCol('Sondering nr.', 'sondering_nr'),
     sondering_aangevraagd: textCol('Sondering aangevraagd', 'sondering_aangevraagd'),
     sondering_retour: textCol('Sondering retour', 'sondering_retour'),
@@ -1184,11 +1195,13 @@ export default function LemmerPage() {
             <F label="Schouw uitgevoerd"><DateInput value={form.schouw_uitgevoerd} onChange={v => setForm(f => ({ ...f, schouw_uitgevoerd: v }))} /></F>
             <F label="Opm. uitvoering verwerkt"><DateInput value={form.opmerkingen_uitvoering} onChange={v => setForm(f => ({ ...f, opmerkingen_uitvoering: v }))} /></F>
             <F label="Planning APD's"><DateInput value={form.planning_apds} onChange={v => setForm(f => ({ ...f, planning_apds: v }))} /></F>
+            <F label="HDD Ontwerp"><select className="field-input" value={form.status_ontwerp ?? ''} onChange={e => setForm(f => ({ ...f, status_ontwerp: e.target.value }))}><option value="">—</option>{ONTWERP_STATUSSEN.map(s => <option key={s}>{s}</option>)}</select></F>
             <F label="Ontwerp %"><select className="field-input" value={form.ontwerp_pct ?? ''} onChange={e => setForm(f => ({ ...f, ontwerp_pct: e.target.value ? parseFloat(e.target.value) : undefined }))}>{PCT_OPTS.map(o => <option key={String(o.value)} value={o.value}>{o.label}</option>)}</select></F>
             <F label="Tek %"><select className="field-input" value={form.tek_pct ?? ''} onChange={e => setForm(f => ({ ...f, tek_pct: e.target.value ? parseFloat(e.target.value) : undefined }))}>{PCT_OPTS.map(o => <option key={String(o.value)} value={o.value}>{o.label}</option>)}</select></F>
             <F label="Werkterrein"><select className="field-input" value={form.status_werkterrein ?? ''} onChange={e => setForm(f => ({ ...f, status_werkterrein: e.target.value }))}><option value="">—</option>{STATUSSEN.map(s => <option key={s}>{s}</option>)}</select></F>
             <F label="Berekening"><select className="field-input" value={form.status_berekening ?? ''} onChange={e => setForm(f => ({ ...f, status_berekening: e.target.value }))}><option value="">—</option>{STATUSSEN.map(s => <option key={s}>{s}</option>)}</select></F>
             <div style={{ gridColumn: '1/-1', height: '0.5px', background: 'var(--border)' }} />
+            <F label="Proefsleuf nr."><input className="field-input" value={form.proefsleuf_nr ?? ''} onChange={e => setForm(f => ({ ...f, proefsleuf_nr: e.target.value }))} /></F>
             <F label="Sondering nr."><input className="field-input" value={form.sondering_nr ?? ''} onChange={e => setForm(f => ({ ...f, sondering_nr: e.target.value }))} /></F>
             <F label="Sondering aangevraagd"><input className="field-input" value={form.sondering_aangevraagd ?? ''} onChange={e => setForm(f => ({ ...f, sondering_aangevraagd: e.target.value }))} /></F>
             <F label="Sondering retour"><input className="field-input" value={form.sondering_retour ?? ''} onChange={e => setForm(f => ({ ...f, sondering_retour: e.target.value }))} /></F>
