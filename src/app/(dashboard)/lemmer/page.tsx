@@ -272,10 +272,10 @@ const DEFAULT_HIDDEN: ColId[] = [
   'startdatum', 'eind_weken',
   'aanlevering_compleet', 'datum_gereed', 'ter_controle_uitvoering', 'retour_uitvoering', 'schouw_uitgevoerd',
   'opmerkingen_uitvoering', 'ontwerp_pct', 'sondering_aangevraagd', 'sondering_retour',
-  'raakvlak', 'gereed',
+  'raakvlak',
 ];
-const COL_ORDER_KEY = 'hvp_lemmer_colorder_v14';
-const HIDDEN_KEY = 'hvp_lemmer_hidden_v9';
+const COL_ORDER_KEY = 'hvp_lemmer_colorder_v15';
+const HIDDEN_KEY = 'hvp_lemmer_hidden_v10';
 /* Berekende kolommen zonder eigen databaseveld — niet filterbaar via de header. */
 const NIET_FILTERBAAR: ColId[] = [];
 
