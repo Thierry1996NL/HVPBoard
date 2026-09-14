@@ -167,6 +167,7 @@ interface LemmerBoring {
   intake_compleet?: boolean;
   gereed?: boolean;
   startdatum?: string;
+  einddatum?: string;
   stappen?: Record<string, StapData>;
 }
 
@@ -261,10 +262,11 @@ const DEFAULT_COL_ORDER: ColId[] = [
   'startdatum', 'eind_weken',
   'aanlevering_compleet', 'datum_gereed', 'ter_controle_uitvoering', 'retour_uitvoering', 'schouw_uitgevoerd',
   'opmerkingen_uitvoering', 'ontwerp_pct', 'sondering_aangevraagd', 'sondering_retour',
-  'raakvlak', 'gereed',
-  /* Helemaal rechts: bepaalt de rood/geel/groen-status (zie boringHealth), daarom altijd zichtbaar
-     en als laatste kolom, i.p.v. tussen de andere datumvelden. */
-  'einddatum',
+  'raakvlak',
+  /* Helemaal rechts: 'einddatum' (Definitief gereed) bepaalt de rood/geel/groen-status (zie
+     boringHealth), daarom altijd zichtbaar. 'gereed' (de handmatige Ja/Nee-knop) staat er
+     bewust vlak naast, als allerlaatste kolom. */
+  'einddatum', 'gereed',
 ];
 /* Standaard verborgen kolommen (compacte weergave) — toonbaar via de kolomkiezer of de knop Uitklappen. */
 const DEFAULT_HIDDEN: ColId[] = [
@@ -424,6 +426,15 @@ export default function LemmerPage() {
     const raw = (d.stappen ?? {})[id] as StapData | string | undefined;
     return typeof raw === 'string' ? { status: raw } : (raw ?? {});
   };
+  /* Automatisch berekende einddatum: laatste stap-deadline, of anders projectie vanaf startdatum. */
+  const autoEinddatum = (d: LemmerBoring): string | null => {
+    const deadlines = ALLE_STAPPEN.map(s => getStap(d, s.id).deadline).filter(Boolean) as string[];
+    return deadlines.length ? deadlines.reduce((a, b) => (a > b ? a : b)) : einddatumVan(d.startdatum);
+  };
+  /* Effectieve einddatum: een handmatig ingevulde datum (d.einddatum) heeft voorrang op de
+     automatische berekening — zo kun je 'Definitief gereed' overrulen zonder de stappen-data
+     of startdatum aan te raken. */
+  const einddatumEffectief = (d: LemmerBoring): string | null => d.einddatum ?? autoEinddatum(d);
   /* Startdatum opslaan én meteen plandatum + deadline van alle stappen doorrekenen. */
   const setStartEnPlanning = async (d: LemmerBoring, start?: string) => {
     if (!start) { try { await save(d.id, { startdatum: undefined }); } catch (e) { toast((e as Error).message, 'error'); } return; }
@@ -445,8 +456,7 @@ export default function LemmerPage() {
      datum die ook in de kolom 'Einddatum (auto)' te zien is.) */
   const boringHealth = (d: LemmerBoring): 'groen' | 'geel' | 'rood' => {
     if (d.gereed) return 'groen';
-    const deadlines = ALLE_STAPPEN.map(s => getStap(d, s.id).deadline).filter(Boolean) as string[];
-    const e = deadlines.length ? deadlines.reduce((a, b) => (a > b ? a : b)) : einddatumVan(d.startdatum);
+    const e = einddatumEffectief(d);
     if (!e) return 'groen';
     const wk = (new Date(e).getTime() - Date.now()) / MS_WEEK;
     if (wk < 0) return 'rood';
@@ -459,8 +469,7 @@ export default function LemmerPage() {
     if (id === 'case_nr') return PROJECTEN.find(p => p.wp === d.werkpakket_id)?.case ?? '';
     if (id === 'gereed') return d.gereed ? 'ja' : 'nee';
     if (id === 'einddatum' || id === 'eind_weken') {
-      const deadlines = ALLE_STAPPEN.map(s => getStap(d, s.id).deadline).filter(Boolean) as string[];
-      const e = deadlines.length ? deadlines.reduce((a, b) => (a > b ? a : b)) : einddatumVan(d.startdatum);
+      const e = einddatumEffectief(d);
       if (id === 'einddatum') return e ?? '';
       if (!e) return '';
       return String(Math.round((new Date(e).getTime() - Date.now()) / (1000 * 60 * 60 * 24 * 7)));
@@ -632,14 +641,19 @@ export default function LemmerPage() {
         onSave={v => setStartEnPlanning(d, (v as string | undefined) || undefined)} />
     ) },
     einddatum: { label: 'Definitief gereed', cell: d => {
-      const deadlines = ALLE_STAPPEN.map(s => getStap(d, s.id).deadline).filter(Boolean) as string[];
-      const e = deadlines.length ? deadlines.reduce((a, b) => (a > b ? a : b)) : einddatumVan(d.startdatum);
-      return <td style={{ fontSize: 11, whiteSpace: 'nowrap', color: e ? 'var(--text-2)' : 'var(--text-4)', fontWeight: e ? 500 : 400 }}
-        title={e ? 'Laatste deadline van de stappen' : 'Vul eerst een startdatum in'}>{e ? fmtDate(e) : '—'}</td>;
+      const auto = autoEinddatum(d);
+      const e = d.einddatum ?? auto;
+      return (
+        <InlineCell type="date" value={d.einddatum ?? auto ?? undefined}
+          display={<span style={{ fontSize: 11, whiteSpace: 'nowrap', color: e ? 'var(--text-2)' : 'var(--text-4)', fontWeight: e ? 500 : 400 }}>
+            {e ? fmtDate(e) : '—'}
+          </span>}
+          tdStyle={{}}
+          onSave={v => saveField(d.id, { einddatum: (v as string | undefined) || undefined })} />
+      );
     } },
     eind_weken: { label: 'Weken tot eind', cell: d => {
-      const deadlines = ALLE_STAPPEN.map(s => getStap(d, s.id).deadline).filter(Boolean) as string[];
-      const e = deadlines.length ? deadlines.reduce((a, b) => (a > b ? a : b)) : einddatumVan(d.startdatum);
+      const e = einddatumEffectief(d);
       if (!e) return <td style={{ color: 'var(--text-4)', fontSize: 11 }}>—</td>;
       return <td style={{ whiteSpace: 'nowrap' }}>{wkChip(e)}</td>;
     } },
