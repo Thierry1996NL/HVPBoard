@@ -492,6 +492,7 @@ export default function LemmerPage() {
     if (id === 'project') return PROJECTEN.find(p => p.wp === d.werkpakket_id)?.naam ?? '';
     if (id === 'case_nr') return PROJECTEN.find(p => p.wp === d.werkpakket_id)?.case ?? '';
     if (id === 'gereed') return d.gereed ? 'ja' : 'nee';
+    if (id === 'afgeleide_eisen') return d.afgeleide_eisen ? 'Ja' : 'Nee';
     if (id === 'einddatum' || id === 'eind_weken') {
       const e = einddatumEffectief(d);
       if (id === 'einddatum') return e ?? '';
@@ -946,9 +947,12 @@ export default function LemmerPage() {
         <button className="btn" onClick={toggleAlleKolommen} style={{ fontSize: 11 }} title={allVisible ? 'Terug naar compacte weergave' : 'Alle projectinfo als kolommen tonen'}>
           {allVisible ? '⤡ Inklappen' : '⤢ Uitklappen'}
         </button>
-        <button className="btn" onClick={() => setFiltersOpen(o => !o)} style={{ fontSize: 11, ...(filtersOpen || activeFilters ? { borderColor: 'var(--accent)', color: 'var(--accent)' } : {}) }} title="Filter de rijen per kolom">
+        <button className="btn" onClick={() => setFiltersOpen(o => !o)} style={{ fontSize: 11, ...(filtersOpen || activeFilters ? { borderColor: 'var(--accent)', color: 'var(--accent)' } : {}) }} title="Toon een filter-knop (▾) in elke kolomkop, zoals in Excel">
           ⌕ Filter{activeFilters ? ` (${activeFilters})` : ''}
         </button>
+        {activeFilters > 0 && (
+          <button className="btn" onClick={() => setColFilters({})} style={{ fontSize: 11 }} title="Alle kolomfilters wissen">✕ Wis filters</button>
+        )}
         <button className="btn" onClick={handleOpslaan} disabled={opslaan} style={{ fontSize: 11 }} title="Synchroniseren met de database (wijzigingen worden al automatisch opgeslagen)">
           {opslaan ? '… Opslaan' : '💾 Opslaan'}
         </button>
@@ -994,16 +998,28 @@ export default function LemmerPage() {
             <tr>
               <th style={{ ...fixedW(STICKY_META_W), position: 'sticky', left: 0, zIndex: 6, background: stickyGrey, verticalAlign: 'top' }}></th>
               <th style={{ ...fixedW(STICKY_NUM_W), color: 'var(--text-4)', fontWeight: 600, position: 'sticky', left: STICKY_META_W, zIndex: 6, background: stickyGrey, verticalAlign: 'top', padding: 0 }} title="Volgnummer">
-                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '8px 10px' }}><span>#</span></div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '5px 8px' }}><span>#</span></div>
               </th>
               {wp === 0 && (
                 <th style={{ ...fixedW(STICKY_PROJECT_W), position: 'sticky', left: stickyProjectLeft, zIndex: 6, background: 'var(--surface2)', verticalAlign: 'top', padding: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', padding: '8px 10px' }}><span>Project</span></div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4, padding: '5px 8px' }}>
+                    <span>Project</span>
+                    {filtersOpen && (
+                      <button type="button" draggable={false} onMouseDown={e => e.stopPropagation()} onClick={e => openFilterMenu(e, 'project')} title="Filteren"
+                        style={{ flexShrink: 0, border: 'none', background: 'none', cursor: 'pointer', padding: 0, lineHeight: 1, fontSize: 10, color: colFilters.project !== undefined ? 'var(--accent)' : 'var(--text-4)' }}>▾</button>
+                    )}
+                  </div>
                 </th>
               )}
               <th style={{ ...fixedW(STICKY_BORING_W), position: 'sticky', left: stickyBoringLeft, zIndex: 6, background: 'var(--surface2)', boxShadow: '2px 0 4px -2px rgba(0,0,0,0.10)', verticalAlign: 'top', padding: 0 }}
                 className="sortable" onClick={() => sort('boring_nr')}>
-                <div style={{ display: 'flex', alignItems: 'flex-start', padding: '8px 10px' }}><span>Boor nr{srt('boring_nr')}</span></div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4, padding: '5px 8px' }}>
+                  <span>Boor nr{srt('boring_nr')}</span>
+                  {filtersOpen && (
+                    <button type="button" draggable={false} onMouseDown={e => e.stopPropagation()} onClick={e => openFilterMenu(e, 'boring_nr')} title="Filteren"
+                      style={{ flexShrink: 0, border: 'none', background: 'none', cursor: 'pointer', padding: 0, lineHeight: 1, fontSize: 10, color: colFilters.boring_nr !== undefined ? 'var(--accent)' : 'var(--text-4)' }}>▾</button>
+                  )}
+                </div>
               </th>
               {visibleCols.map(id => {
                 const col = columns[id];
@@ -1018,45 +1034,58 @@ export default function LemmerPage() {
                     onDragStart={e => onDragStart(e, id)} onDragOver={e => onDragOver(e, id)}
                     onDrop={e => onDrop(e, id)} onDragEnd={onDragEnd}
                     onClick={sortable ? () => sort(col.sortKey!) : undefined}>
-                    <div style={{ display: 'flex', alignItems: 'flex-start', padding: '8px 10px', whiteSpace: 'normal', wordBreak: 'normal', overflowWrap: 'break-word', lineHeight: 1.3 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4, padding: '5px 8px', whiteSpace: 'normal', wordBreak: 'normal', overflowWrap: 'break-word', lineHeight: 1.15 }}>
                       <span>{col.label}{sortable ? srt(col.sortKey!) : null}</span>
+                      {filtersOpen && (
+                        <button type="button" draggable={false} onMouseDown={e => e.stopPropagation()} onClick={e => openFilterMenu(e, id)} title="Filteren"
+                          style={{ flexShrink: 0, border: 'none', background: 'none', cursor: 'pointer', padding: 0, lineHeight: 1, fontSize: 10, color: colFilters[id] !== undefined ? 'var(--accent)' : 'var(--text-4)' }}>▾</button>
+                      )}
                     </div>
                   </th>
                 );
               })}
               <th style={{ position: 'static', verticalAlign: 'top' }}></th>
             </tr>
-            {filtersOpen && (
-              <tr>
-                <th style={{ ...fixedW(STICKY_META_W), padding: '2px 4px', textAlign: 'center', position: 'sticky', left: 0, zIndex: 6, background: stickyGrey }}>
-                  {activeFilters > 0 && (
-                    <button className="btn" title="Filters wissen" style={{ fontSize: 10, padding: '1px 5px' }} onClick={() => setColFilters({})}>✕</button>
-                  )}
-                </th>
-                <th style={{ ...fixedW(STICKY_NUM_W), position: 'sticky', left: STICKY_META_W, zIndex: 6, background: stickyGrey }}></th>
-                {wp === 0 && (
-                  <th style={{ ...fixedW(STICKY_PROJECT_W), padding: '2px 6px', position: 'sticky', left: stickyProjectLeft, zIndex: 6, background: 'var(--surface2)' }}>
-                    <input className="inline-edit" style={{ width: '100%', minWidth: 64, fontWeight: 400 }} placeholder="filter…"
-                      value={colFilters['project'] ?? ''} onChange={e => setColFilters(f => ({ ...f, project: e.target.value }))} />
-                  </th>
-                )}
-                <th style={{ ...fixedW(STICKY_BORING_W), padding: '2px 6px', position: 'sticky', left: stickyBoringLeft, zIndex: 6, background: 'var(--surface2)', boxShadow: '2px 0 4px -2px rgba(0,0,0,0.10)' }}>
-                  <input className="inline-edit" style={{ width: '100%', minWidth: 64, fontWeight: 400 }} placeholder="filter…"
-                    value={colFilters['boring_nr'] ?? ''} onChange={e => setColFilters(f => ({ ...f, boring_nr: e.target.value }))} />
-                </th>
-                {visibleCols.map(id => (
-                  <th key={id} style={{ padding: '2px 6px', position: 'static', overflow: 'hidden' }}>
-                    <input className="inline-edit" style={{ width: '100%', minWidth: 64, fontWeight: 400 }} placeholder="filter…"
-                      value={colFilters[id] ?? ''} onChange={e => setColFilters(f => ({ ...f, [id]: e.target.value }))} />
-                  </th>
-                ))}
-                <th style={{ position: 'static' }}></th>
-              </tr>
-            )}
           </thead>
         </table>
       </div>
       </div>
+
+      {filterMenu && (
+        <>
+          <div onClick={() => setFilterMenu(null)} style={{ position: 'fixed', inset: 0, zIndex: 60 }} />
+          <div className="lem-colpicker" style={{
+            position: 'fixed', right: 'auto',
+            left: Math.min(filterMenu.x, (typeof window !== 'undefined' ? window.innerWidth : 1200) - 260),
+            top: filterMenu.y, zIndex: 61, width: 236,
+          }}>
+            <div style={{ padding: '2px 4px 8px' }}>
+              <input className="field-input" placeholder="Zoeken…" value={filterSearch} onChange={e => setFilterSearch(e.target.value)}
+                style={{ width: '100%', fontSize: 11 }} autoFocus />
+            </div>
+            <label className="lem-colpicker-row" style={{ fontWeight: 700, borderBottom: '0.5px solid var(--border)', marginBottom: 4, paddingBottom: 7 }}>
+              <input type="checkbox" checked={filterAllChecked} onChange={() => toggleFilterSelectAll(filterMenu.id)} />
+              (Alles selecteren)
+            </label>
+            <div style={{ maxHeight: 220, overflowY: 'auto' }}>
+              {filterOptionsFiltered.map(o => (
+                <label key={o.value} className="lem-colpicker-row">
+                  <input type="checkbox" checked={!filterCurrentSet || filterCurrentSet.has(o.value)} onChange={() => toggleFilterValue(filterMenu.id, o.value)} />
+                  <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.value || '(leeg)'}</span>
+                  <span style={{ color: 'var(--text-4)', fontSize: 10 }}>{o.count}</span>
+                </label>
+              ))}
+              {filterOptionsFiltered.length === 0 && (
+                <div style={{ padding: '6px 8px', fontSize: 11, color: 'var(--text-4)' }}>Geen waarden gevonden</div>
+              )}
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '7px 4px 2px', borderTop: '0.5px solid var(--border)', marginTop: 4 }}>
+              <button className="btn" style={{ fontSize: 10, padding: '2px 6px' }} onClick={() => clearFilterCol(filterMenu.id)}>Wis filter</button>
+              <button className="btn" style={{ fontSize: 10, padding: '2px 6px' }} onClick={() => setFilterMenu(null)}>Sluiten</button>
+            </div>
+          </div>
+        </>
+      )}
 
       <div className="table-wrap">
         <div className="tbl-scroll" ref={bodyScrollRef} onScroll={syncScrollFromBody}>
