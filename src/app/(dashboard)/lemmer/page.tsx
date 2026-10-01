@@ -24,6 +24,9 @@ const STATUS_COLORS: Record<string, { bg: string; fg: string; pct: number; label
 const fmtDate = (s?: string) =>
   s ? new Date(s).toLocaleDateString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—';
 
+const fmtDateTime = (s?: string) =>
+  s ? new Date(s).toLocaleString('nl-NL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—';
+
 const statusPill = (s?: string) => {
   const c = STATUS_COLORS[s ?? ''];
   return c
@@ -179,6 +182,8 @@ interface LemmerBoring {
   raakvlak_bomen?: string;
   afgeleide_eisen?: boolean;
   opmerking_ontwerptechnisch?: string;
+  laatst_gewijzigd_door?: string;
+  laatst_gewijzigd_op?: string;
   stappen?: Record<string, StapData>;
 }
 
@@ -262,7 +267,7 @@ type ColId =
   | 'bundel_configuratie' | 'raakvlak' | 'opmerking_extra' | 'case_nr' | 'gereed' | 'project' | 'voorstel'
   | 'vergunning_status' | 'vergunning_toestemmingen' | 'vergunning_deadline_vooroverleg'
   | 'vergunning_deadline_bespreekpunten' | 'vergunning_deadline_aanvraag' | 'vergunning_deadline_definitief'
-  | 'boorplan' | 'vitens' | 'raakvlak_bomen' | 'afgeleide_eisen' | 'opmerking_ontwerptechnisch';
+  | 'boorplan' | 'vitens' | 'raakvlak_bomen' | 'afgeleide_eisen' | 'opmerking_ontwerptechnisch' | 'laatst_gewijzigd';
 
 /* Volgorde 1 t/m 18 komt exact overeen met het oorspronkelijke Excel-dashboard
    (Dashboard_HDD_V2.0) — dat is nu ook de standaard-weergave. Alles daarna zijn
@@ -279,7 +284,7 @@ const DEFAULT_COL_ORDER: ColId[] = [
   'startdatum', 'eind_weken',
   'aanlevering_compleet', 'datum_gereed', 'ter_controle_uitvoering', 'retour_uitvoering', 'schouw_uitgevoerd',
   'opmerkingen_uitvoering', 'ontwerp_pct', 'sondering_aangevraagd', 'sondering_retour',
-  'raakvlak',
+  'raakvlak', 'laatst_gewijzigd',
   /* Helemaal rechts: 'einddatum' (Definitief gereed) bepaalt de rood/geel/groen-status (zie
      boringHealth), daarom altijd zichtbaar. 'gereed' (de handmatige Ja/Nee-knop) staat er
      bewust vlak naast, als allerlaatste kolom. */
@@ -296,8 +301,11 @@ const DEFAULT_HIDDEN: ColId[] = [
   'opmerkingen_uitvoering', 'ontwerp_pct', 'sondering_aangevraagd', 'sondering_retour',
   'raakvlak',
 ];
-const COL_ORDER_KEY = 'hvp_lemmer_colorder_v16';
-const HIDDEN_KEY = 'hvp_lemmer_hidden_v11';
+const COL_ORDER_KEY = 'hvp_lemmer_colorder_v17';
+const HIDDEN_KEY = 'hvp_lemmer_hidden_v12';
+/* Zelfgekozen naam ('wie ben jij') per browser — gebruikt om elke save() te stempelen
+   met wie 'm deed (zie useLemmerData → save, en de kolom 'Laatst gewijzigd'). */
+const IKBEN_KEY = 'hvp_lemmer_ikben_v1';
 /* Berekende kolommen zonder eigen databaseveld — niet filterbaar via de header. */
 const NIET_FILTERBAAR: ColId[] = [];
 
@@ -316,6 +324,17 @@ const PROJECTEN: ProjectDef[] = [
 export default function LemmerPage() {
   const toast = useToast();
   const { data, loading, save, remove, refresh, personen, addPersoon, removePersoon } = useLemmerData();
+  /* Wie ben jij: geen login in deze app, dus bewaren we een zelfgekozen naam (uit de
+     Personen-lijst) per browser in localStorage. save() in useLemmerData leest dit zelf
+     uit localStorage en zet het automatisch bij elke wijziging op 'Laatst gewijzigd'. */
+  const [ikBen, setIkBen] = useState('');
+  useEffect(() => {
+    try { setIkBen(localStorage.getItem(IKBEN_KEY) ?? ''); } catch { /* negeer */ }
+  }, []);
+  const kiesIkBen = (naam: string) => {
+    setIkBen(naam);
+    try { localStorage.setItem(IKBEN_KEY, naam); } catch { /* negeer */ }
+  };
   const [opslaan, setOpslaan] = useState(false);
   const handleOpslaan = async () => {
     setOpslaan(true);
@@ -493,6 +512,7 @@ export default function LemmerPage() {
     if (id === 'case_nr') return PROJECTEN.find(p => p.wp === d.werkpakket_id)?.case ?? '';
     if (id === 'gereed') return d.gereed ? 'ja' : 'nee';
     if (id === 'afgeleide_eisen') return d.afgeleide_eisen ? 'Ja' : 'Nee';
+    if (id === 'laatst_gewijzigd') return d.laatst_gewijzigd_door ?? '';
     if (id === 'einddatum' || id === 'eind_weken') {
       const e = einddatumEffectief(d);
       if (id === 'einddatum') return e ?? '';
@@ -737,6 +757,17 @@ export default function LemmerPage() {
     raakvlak_bomen: textCol('Raakvlak bomen / boomeffectanalyse', 'raakvlak_bomen', { wide: true }),
     afgeleide_eisen: boolCol('Afgeleide eisen?', 'afgeleide_eisen'),
     opmerking_ontwerptechnisch: textCol('Opmerking ontwerptechnisch', 'opmerking_ontwerptechnisch', { wide: true }),
+    laatst_gewijzigd: { label: 'Laatst gewijzigd', sortKey: 'laatst_gewijzigd_op', cell: d => {
+      const door = d.laatst_gewijzigd_door;
+      const op = d.laatst_gewijzigd_op;
+      if (!door && !op) return <td style={{ color: 'var(--text-4)', fontSize: 11 }}>—</td>;
+      return (
+        <td style={{ fontSize: 11, whiteSpace: 'nowrap' }} title={op ? new Date(op).toLocaleString('nl-NL') : undefined}>
+          <span style={{ color: 'var(--text-2)' }}>{door || '—'}</span>
+          {op && <span style={{ color: 'var(--text-4)' }}> · {fmtDateTime(op)}</span>}
+        </td>
+      );
+    } },
     startdatum: { label: 'Startdatum', sortKey: 'startdatum', cell: d => (
       <InlineCell type="date" value={d.startdatum}
         display={<span style={{ fontSize: 11, color: 'var(--text-3)', whiteSpace: 'nowrap' }}>{fmtDate(d.startdatum)}</span>}
@@ -943,6 +974,11 @@ export default function LemmerPage() {
 
       <div className="filter-bar" style={{ display: 'flex', gap: 8, alignItems: 'center', margin: '0.75rem 0', flexWrap: 'wrap' }}>
         <input className="field-input" placeholder="Zoeken…" value={search} onChange={e => setSearch(e.target.value)} style={{ maxWidth: 280 }} />
+        <select className="field-input" style={{ fontSize: 11, maxWidth: 150 }} value={ikBen} onChange={e => kiesIkBen(e.target.value)}
+          title="Wie ben jij? Wordt automatisch vastgelegd bij elke wijziging die je opslaat.">
+          <option value="">Wie ben jij?</option>
+          {personen.map(p => <option key={p.id} value={p.naam}>{p.naam}</option>)}
+        </select>
         <button className="btn" onClick={() => setPersonenOpen(true)} style={{ fontSize: 11 }} title="Personen beheren">👤 Personen</button>
         <button className="btn" onClick={toggleAlleKolommen} style={{ fontSize: 11 }} title={allVisible ? 'Terug naar compacte weergave' : 'Alle projectinfo als kolommen tonen'}>
           {allVisible ? '⤡ Inklappen' : '⤢ Uitklappen'}
@@ -1289,6 +1325,9 @@ const BORINGEN_COLS = new Set<string>([
   'vergunning_status', 'vergunning_toestemmingen', 'vergunning_deadline_vooroverleg',
   'vergunning_deadline_bespreekpunten', 'vergunning_deadline_aanvraag', 'vergunning_deadline_definitief',
   'boorplan', 'vitens', 'raakvlak_bomen', 'afgeleide_eisen', 'opmerking_ontwerptechnisch',
+  /* 1 okt 2026: wie/wanneer een boring voor het laatst is gewijzigd — automatisch gezet
+     door save() (zie useLemmerData), niet via het bewerk-formulier. */
+  'laatst_gewijzigd_door', 'laatst_gewijzigd_op',
 ]);
 function fromDb(row: Record<string, unknown>): LemmerBoring {
   return {
@@ -1346,12 +1385,18 @@ function useLemmerData() {
   }, []);
   const save = useCallback(async (id: string | null, form: Partial<LemmerBoring>) => {
     const supabase = createClient();
+    /* Elke wijziging stempelen met wie 'm deed (zelfgekozen naam, zie IKBEN_KEY) en wanneer —
+       zo is altijd inzichtelijk wie een boring voor het laatst heeft aangepast. Geen naam
+       gekozen? Dan blijft 'laatst_gewijzigd_door' leeg, maar het tijdstip wordt wel gezet. */
+    let actor: string | undefined;
+    try { actor = localStorage.getItem(IKBEN_KEY) || undefined; } catch { /* negeer */ }
+    const stamped: Partial<LemmerBoring> = { ...form, laatst_gewijzigd_door: actor, laatst_gewijzigd_op: new Date().toISOString() };
     if (id) {
-      const { error } = await supabase.from('boringen').update(toDb(form) as never).eq('id', id);
+      const { error } = await supabase.from('boringen').update(toDb(stamped) as never).eq('id', id);
       if (error) throw new Error(error.message);
-      setData(prev => prev.map(r => r.id === id ? { ...r, ...form } : r));
+      setData(prev => prev.map(r => r.id === id ? { ...r, ...stamped } : r));
     } else {
-      const { data: ins, error } = await supabase.from('boringen').insert(toDb(form) as never).select();
+      const { data: ins, error } = await supabase.from('boringen').insert(toDb(stamped) as never).select();
       if (error) throw new Error(error.message);
       if (ins) setData(prev => [...prev, ...ins.map(r => fromDb(r as Record<string, unknown>))]);
     }
