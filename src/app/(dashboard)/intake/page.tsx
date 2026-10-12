@@ -29,6 +29,8 @@ const PROJECTEN = [
   { wp: 5, naam: 'Urk-Zuid' },
   { wp: 6, naam: 'Luinjeberd' },
   { wp: 7, naam: 'Urk WP2' },
+  { wp: 8, naam: 'Spannenburg' },
+  { wp: 9, naam: 'Oldeberkoop' },
 ];
 
 export default function IntakePage() {

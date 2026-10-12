@@ -319,6 +319,8 @@ const PROJECTEN: ProjectDef[] = [
   { wp: 5, naam: 'Urk-Zuid',    fase: 'DO', case: '295885',        pl: 'Patrick Kroneman / Thomas Burkels' },
   { wp: 6, naam: 'Luinjeberd',  fase: 'DO', case: '—',             pl: 'Eelco Zijnstra' },
   { wp: 7, naam: 'Urk WP2',     fase: 'UO', case: '254496/268298', pl: 'Patrick Kroneman' },
+  { wp: 8, naam: 'Spannenburg', fase: '—',  case: '—',             pl: '—' },
+  { wp: 9, naam: 'Oldeberkoop', fase: '—',  case: '—',             pl: '—' },
 ];
 
 export default function LemmerPage() {
