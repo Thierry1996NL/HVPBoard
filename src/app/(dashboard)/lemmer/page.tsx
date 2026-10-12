@@ -209,6 +209,14 @@ const STATUSSEN    = ['Niet gestart', 'Gestart', 'Ter controle', 'Goedgekeurd', 
 /* Statussen voor 'HDD Ontwerp' — zelfde set als het oorspronkelijke Excel-dashboard (zie STATUS_COLORS-legenda). */
 /* Statussen voor de haalbaarheidsanalyse per boring (12 okt 2026). */
 const HAALBAARHEID_STATUSSEN = ['Niet gestart', 'Gestart', 'On hold', 'Afgerond'];
+/* Prioriteit per boring (12 okt 2026). PRIO_RANK bepaalt de volgorde bij sorteren/filteren. */
+const PRIORITEITEN = ['Hoog', 'Middel', 'Laag'];
+const PRIO_RANK: Record<string, number> = { Hoog: 1, Middel: 2, Laag: 3 };
+const PRIO_KLEUR: Record<string, { bg: string; fg: string }> = {
+  Hoog:   { bg: '#D70015', fg: '#fff' },
+  Middel: { bg: '#F5A623', fg: '#fff' },
+  Laag:   { bg: '#8BC34A', fg: '#fff' },
+};
 const ONTWERP_STATUSSEN = ['Niet gestart', 'Gestart', 'Ter controle', 'Afgekeurd', 'Goedgekeurd', 'Vrijgegeven', 'Issue', 'Vervallen'];
 const PCT_OPTS: InlineOpt[] = [
   { value: '', label: '—' }, { value: 0, label: '0%' }, { value: 0.25, label: '25%' },
@@ -292,11 +300,13 @@ type ColId =
    staan (zie DEFAULT_HIDDEN) maar via de kolomkiezer of 'Uitklappen' bereikbaar blijven. */
 const DEFAULT_COL_ORDER: ColId[] = [
   'case_nr', 'boring_nr', 'werkpakket_nr', 'locatie', 'lengte_m', 'type_boring', 'aannemer', 'klasse',
+  /* 12 okt 2026: Prioriteit (Hoog/Middel/Laag) standaard zichtbaar, na Klasse. */
+  'prioritering',
   'oplevering_toolgate', 'planning_apds', 'status_ontwerp', 'tek_pct', 'status_werkterrein', 'status_berekening',
   'proefsleuf_nr', 'sondering_nr', 'bundel_configuratie', 'opmerking_extra',
   /* 12 okt 2026: haalbaarheidsanalyse per boring + Ja/Nee afgerond — standaard zichtbaar. */
   'haalbaarheidsanalyse', 'haalbaarheid_afgerond', 'haalbaarheid_plandatum', 'haalbaarheid_dagen',
-  'prioritering', 'projectfase', 'engineeringsfase',
+  'projectfase', 'engineeringsfase',
   'vergunning_status', 'vergunning_toestemmingen', 'vergunning_deadline_vooroverleg',
   'vergunning_deadline_bespreekpunten', 'vergunning_deadline_aanvraag', 'vergunning_deadline_definitief',
   'boorplan', 'vitens', 'raakvlak_bomen', 'afgeleide_eisen', 'opmerking_ontwerptechnisch',
@@ -311,7 +321,7 @@ const DEFAULT_COL_ORDER: ColId[] = [
 ];
 /* Standaard verborgen kolommen (compacte weergave) — toonbaar via de kolomkiezer of de knop Uitklappen. */
 const DEFAULT_HIDDEN: ColId[] = [
-  'prioritering', 'projectfase', 'engineeringsfase',
+  'projectfase', 'engineeringsfase',
   'vergunning_status', 'vergunning_toestemmingen', 'vergunning_deadline_vooroverleg',
   'vergunning_deadline_bespreekpunten', 'vergunning_deadline_aanvraag', 'vergunning_deadline_definitief',
   'boorplan', 'vitens', 'raakvlak_bomen', 'afgeleide_eisen', 'opmerking_ontwerptechnisch',
@@ -320,8 +330,8 @@ const DEFAULT_HIDDEN: ColId[] = [
   'opmerkingen_uitvoering', 'ontwerp_pct', 'sondering_aangevraagd', 'sondering_retour',
   'raakvlak',
 ];
-const COL_ORDER_KEY = 'hvp_lemmer_colorder_v19';
-const HIDDEN_KEY = 'hvp_lemmer_hidden_v12';
+const COL_ORDER_KEY = 'hvp_lemmer_colorder_v20';
+const HIDDEN_KEY = 'hvp_lemmer_hidden_v13';
 /* Zelfgekozen naam ('wie ben jij') per browser — gebruikt om elke save() te stempelen
    met wie 'm deed (zie useLemmerData → save, en de kolom 'Laatst gewijzigd'). */
 const IKBEN_KEY = 'hvp_lemmer_ikben_v1';
@@ -580,6 +590,7 @@ export default function LemmerPage() {
     let r = preFiltered;
     if (sortCol) r = [...r].sort((a, b) => {
       const av = a[sortCol], bv = b[sortCol];
+      if (sortCol === 'prioritering') return ((PRIO_RANK[String(av ?? '')] ?? 9) - (PRIO_RANK[String(bv ?? '')] ?? 9)) * sortDir;
       return String(av ?? '').localeCompare(String(bv ?? ''), 'nl', { numeric: true }) * sortDir;
     });
     const fEntries = Object.entries(colFilters).filter(([, v]) => v !== undefined) as [ColId, Set<string>][];
@@ -600,7 +611,9 @@ export default function LemmerPage() {
     for (const d of base) { const v = colFilterValue(d, id); counts.set(v, (counts.get(v) ?? 0) + 1); }
     return Array.from(counts.entries())
       .map(([value, count]) => ({ value, count }))
-      .sort((a, b) => a.value.localeCompare(b.value, 'nl', { numeric: true }));
+      .sort((a, b) => id === 'prioritering'
+        ? (PRIO_RANK[a.value] ?? 9) - (PRIO_RANK[b.value] ?? 9)
+        : a.value.localeCompare(b.value, 'nl', { numeric: true }));
   }, [filterMenu, preFiltered, colFilters]);
 
   const filterOptionsFiltered = useMemo(() => {
@@ -769,7 +782,17 @@ export default function LemmerPage() {
           : <span style={{ color: 'var(--text-4)', fontSize: 11 }}>—</span>}
         onSave={v => saveField(d.id, { klasse: v as string | undefined })} />
     ) },
-    prioritering: textCol('Prioritering', 'prioritering'),
+    prioritering: { label: 'Prioriteit', sortKey: 'prioritering', cell: d => {
+      const v = d.prioritering;
+      const k = v ? PRIO_KLEUR[v] : undefined;
+      return (
+        <InlineCell type="select" value={v} options={toOpts(PRIORITEITEN)}
+          display={k
+            ? <span style={{ fontSize: 10, fontWeight: 600, padding: '3px 9px', borderRadius: 20, background: k.bg, color: k.fg, whiteSpace: 'nowrap' }}>{v}</span>
+            : <span style={{ color: v ? 'var(--text-2)' : 'var(--text-4)', fontSize: 11 }}>{v || '—'}</span>}
+          onSave={val => saveField(d.id, { prioritering: (val ?? '') as string })} />
+      );
+    } },
     oplevering_toolgate: textCol('Oplevering Toolgate', 'oplevering_toolgate', { wide: true }),
     status_ontwerp: statusCol('HDD Ontwerp', 'status_ontwerp', ONTWERP_STATUSSEN),
     projectfase: textCol('Projectfase', 'projectfase'),
@@ -1267,7 +1290,7 @@ export default function LemmerPage() {
             <F label="Type"><select className="field-input" value={form.type_boring ?? ''} onChange={e => setForm(f => ({ ...f, type_boring: e.target.value }))}><option value="">—</option>{TYPES_BORING.map(t => <option key={t}>{t}</option>)}</select></F>
             <F label="Aannemer"><select className="field-input" value={form.aannemer ?? ''} onChange={e => setForm(f => ({ ...f, aannemer: e.target.value }))}><option value="">—</option>{AANNEMERS.map(a => <option key={a}>{a}</option>)}</select></F>
             <F label="Klasse"><select className="field-input" value={form.klasse ?? ''} onChange={e => setForm(f => ({ ...f, klasse: e.target.value }))}><option value="">—</option>{KLASSEN.map(k => <option key={k}>{k}</option>)}</select></F>
-            <F label="Prioritering"><input className="field-input" value={form.prioritering ?? ''} onChange={e => setForm(f => ({ ...f, prioritering: e.target.value }))} /></F>
+            <F label="Prioriteit"><select className="field-input" value={form.prioritering ?? ''} onChange={e => setForm(f => ({ ...f, prioritering: e.target.value }))}><option value="">—</option>{PRIORITEITEN.map(p => <option key={p}>{p}</option>)}{form.prioritering && !PRIORITEITEN.includes(form.prioritering) && <option>{form.prioritering}</option>}</select></F>
             <F label="Oplevering Toolgate"><input className="field-input" value={form.oplevering_toolgate ?? ''} onChange={e => setForm(f => ({ ...f, oplevering_toolgate: e.target.value }))} /></F>
             <F label="Projectfase"><input className="field-input" value={form.projectfase ?? ''} onChange={e => setForm(f => ({ ...f, projectfase: e.target.value }))} /></F>
             <F label="Engineeringsfase"><input className="field-input" value={form.engineeringsfase ?? ''} onChange={e => setForm(f => ({ ...f, engineeringsfase: e.target.value }))} /></F>
