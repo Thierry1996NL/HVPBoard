@@ -1174,24 +1174,27 @@ export default function LemmerPage() {
                 voor de kolombreedte. Zo wordt elke kolom minstens zo breed als zijn kop
                 (langste woord), en lopen lange koppen boven smalle kolommen (bijv. alleen
                 '—' of 'Nee') niet meer door elkaar. measureFlexColWidths neemt die
-                breedte daarna over voor de kop-tabel. */}
+                breedte daarna over voor de kop-tabel.
+                Let op: Firefox telt een rij met visibility: collapse níet mee voor de
+                kolombreedte. Daarom is de rij gewoon 'hidden' en is de inhoud 0 px hoog
+                (height 0 + overflow hidden) — de breedte telt dan in elke browser mee. */}
             <thead aria-hidden="true">
-              <tr style={{ visibility: 'collapse' }}>
-                <th style={{ padding: 0 }} /><th style={{ padding: 0 }} />
-                {wp === 0 && <th style={{ padding: 0 }} />}
-                <th style={{ padding: 0 }} />
+              <tr style={{ visibility: 'hidden' }}>
+                <th style={{ padding: 0, border: 'none', height: 0 }} /><th style={{ padding: 0, border: 'none', height: 0 }} />
+                {wp === 0 && <th style={{ padding: 0, border: 'none', height: 0 }} />}
+                <th style={{ padding: 0, border: 'none', height: 0 }} />
                 {visibleCols.map(id => {
                   const col = columns[id];
                   return (
-                    <th key={id} style={{ position: 'static', padding: 0 }}>
-                      <div style={{ display: 'flex', gap: 4, padding: '5px 8px', whiteSpace: 'normal', wordBreak: 'normal', lineHeight: 1.15 }}>
+                    <th key={id} style={{ position: 'static', padding: 0, border: 'none', height: 0, lineHeight: 0 }}>
+                      <div style={{ display: 'flex', gap: 4, padding: '0 8px', height: 0, overflow: 'hidden', whiteSpace: 'normal', wordBreak: 'normal', lineHeight: 1.15 }}>
                         <span>{col.label}{col.sortKey ? srt(col.sortKey) : null}</span>
                         <span style={{ flexShrink: 0, fontSize: 10 }}>▾</span>
                       </div>
                     </th>
                   );
                 })}
-                <th style={{ padding: 0 }} />
+                <th style={{ padding: 0, border: 'none', height: 0 }} />
               </tr>
             </thead>
             <tbody>
