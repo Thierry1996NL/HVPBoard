@@ -461,7 +461,9 @@ export default function LemmerPage() {
   const STICKY_META_W = 0;
   const STICKY_NUM_W = 40;    // breedte #-kolom
   const STICKY_PROJECT_W = 120;
-  const STICKY_BORING_W = 92;
+  /* Breedte van de vaste kolom 'Boor nr' groeit mee met het langste boornummer
+     (bijv. 'SPN_HDD-001'), zodat het nummer altijd helemaal zichtbaar is. Min 92, max 180 px. */
+  const STICKY_BORING_W = Math.min(180, Math.max(92, 24 + 8.5 * data.reduce((m, d) => Math.max(m, (d.boring_nr ?? '').length), 0)));
   /* Dwingt een exacte kolombreedte af (anders mag de browser 'm oprekken op inhoud,
      waardoor sticky left-offsets niet meer kloppen en er een kiertje ontstaat). */
   const fixedW = (w: number): React.CSSProperties => ({ width: w, minWidth: w, maxWidth: w, overflow: 'hidden' });
