@@ -184,6 +184,8 @@ interface LemmerBoring {
   opmerking_ontwerptechnisch?: string;
   laatst_gewijzigd_door?: string;
   laatst_gewijzigd_op?: string;
+  haalbaarheidsanalyse?: string;
+  haalbaarheid_afgerond?: boolean;
   stappen?: Record<string, StapData>;
 }
 
@@ -267,7 +269,8 @@ type ColId =
   | 'bundel_configuratie' | 'raakvlak' | 'opmerking_extra' | 'case_nr' | 'gereed' | 'project' | 'voorstel'
   | 'vergunning_status' | 'vergunning_toestemmingen' | 'vergunning_deadline_vooroverleg'
   | 'vergunning_deadline_bespreekpunten' | 'vergunning_deadline_aanvraag' | 'vergunning_deadline_definitief'
-  | 'boorplan' | 'vitens' | 'raakvlak_bomen' | 'afgeleide_eisen' | 'opmerking_ontwerptechnisch' | 'laatst_gewijzigd';
+  | 'boorplan' | 'vitens' | 'raakvlak_bomen' | 'afgeleide_eisen' | 'opmerking_ontwerptechnisch' | 'laatst_gewijzigd'
+  | 'haalbaarheidsanalyse' | 'haalbaarheid_afgerond';
 
 /* Volgorde 1 t/m 18 komt exact overeen met het oorspronkelijke Excel-dashboard
    (Dashboard_HDD_V2.0) — dat is nu ook de standaard-weergave. Alles daarna zijn
@@ -277,6 +280,8 @@ const DEFAULT_COL_ORDER: ColId[] = [
   'case_nr', 'boring_nr', 'werkpakket_nr', 'locatie', 'lengte_m', 'type_boring', 'aannemer', 'klasse',
   'oplevering_toolgate', 'planning_apds', 'status_ontwerp', 'tek_pct', 'status_werkterrein', 'status_berekening',
   'proefsleuf_nr', 'sondering_nr', 'bundel_configuratie', 'opmerking_extra',
+  /* 12 okt 2026: haalbaarheidsanalyse per boring + Ja/Nee afgerond — standaard zichtbaar. */
+  'haalbaarheidsanalyse', 'haalbaarheid_afgerond',
   'prioritering', 'projectfase', 'engineeringsfase',
   'vergunning_status', 'vergunning_toestemmingen', 'vergunning_deadline_vooroverleg',
   'vergunning_deadline_bespreekpunten', 'vergunning_deadline_aanvraag', 'vergunning_deadline_definitief',
@@ -301,7 +306,7 @@ const DEFAULT_HIDDEN: ColId[] = [
   'opmerkingen_uitvoering', 'ontwerp_pct', 'sondering_aangevraagd', 'sondering_retour',
   'raakvlak',
 ];
-const COL_ORDER_KEY = 'hvp_lemmer_colorder_v17';
+const COL_ORDER_KEY = 'hvp_lemmer_colorder_v18';
 const HIDDEN_KEY = 'hvp_lemmer_hidden_v12';
 /* Zelfgekozen naam ('wie ben jij') per browser — gebruikt om elke save() te stempelen
    met wie 'm deed (zie useLemmerData → save, en de kolom 'Laatst gewijzigd'). */
@@ -514,6 +519,7 @@ export default function LemmerPage() {
     if (id === 'case_nr') return PROJECTEN.find(p => p.wp === d.werkpakket_id)?.case ?? '';
     if (id === 'gereed') return d.gereed ? 'ja' : 'nee';
     if (id === 'afgeleide_eisen') return d.afgeleide_eisen ? 'Ja' : 'Nee';
+    if (id === 'haalbaarheid_afgerond') return d.haalbaarheid_afgerond ? 'Ja' : 'Nee';
     if (id === 'laatst_gewijzigd') return d.laatst_gewijzigd_door ?? '';
     if (id === 'einddatum' || id === 'eind_weken') {
       const e = einddatumEffectief(d);
@@ -759,6 +765,8 @@ export default function LemmerPage() {
     raakvlak_bomen: textCol('Raakvlak bomen / boomeffectanalyse', 'raakvlak_bomen', { wide: true }),
     afgeleide_eisen: boolCol('Afgeleide eisen?', 'afgeleide_eisen'),
     opmerking_ontwerptechnisch: textCol('Opmerking ontwerptechnisch', 'opmerking_ontwerptechnisch', { wide: true }),
+    haalbaarheidsanalyse: textCol('Haalbaarheidsanalyse', 'haalbaarheidsanalyse', { wide: true }),
+    haalbaarheid_afgerond: boolCol('Haalbaarheid afgerond', 'haalbaarheid_afgerond'),
     laatst_gewijzigd: { label: 'Laatst gewijzigd', sortKey: 'laatst_gewijzigd_op', cell: d => {
       const door = d.laatst_gewijzigd_door;
       const op = d.laatst_gewijzigd_op;
@@ -1238,9 +1246,11 @@ export default function LemmerPage() {
             <F label="VITENS"><input className="field-input" value={form.vitens ?? ''} onChange={e => setForm(f => ({ ...f, vitens: e.target.value }))} /></F>
             <F label="Raakvlak bomen / boomeffectanalyse"><input className="field-input" value={form.raakvlak_bomen ?? ''} onChange={e => setForm(f => ({ ...f, raakvlak_bomen: e.target.value }))} /></F>
             <F label="Afgeleide eisen?"><label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginTop: 6 }}><input type="checkbox" checked={form.afgeleide_eisen ?? false} onChange={e => setForm(f => ({ ...f, afgeleide_eisen: e.target.checked }))} style={{ width: 15, height: 15 }} /><span style={{ fontSize: 12 }}>Ja</span></label></F>
+            <F label="Haalbaarheid afgerond"><label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginTop: 6 }}><input type="checkbox" checked={form.haalbaarheid_afgerond ?? false} onChange={e => setForm(f => ({ ...f, haalbaarheid_afgerond: e.target.checked }))} style={{ width: 15, height: 15 }} /><span style={{ fontSize: 12 }}>Ja, afgerond</span></label></F>
             <F label="Vervallen"><label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginTop: 6 }}><input type="checkbox" checked={form.vervallen ?? false} onChange={e => setForm(f => ({ ...f, vervallen: e.target.checked }))} style={{ width: 15, height: 15 }} /><span style={{ fontSize: 12 }}>Ja, vervallen</span></label></F>
             <F label="Project gereed"><label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginTop: 6 }}><input type="checkbox" checked={form.gereed ?? false} onChange={e => setForm(f => ({ ...f, gereed: e.target.checked }))} style={{ width: 15, height: 15 }} /><span style={{ fontSize: 12 }}>Ja, gereed</span></label></F>
             <F label="Raakvlak" span><textarea className="field-input" rows={2} value={form.raakvlak ?? ''} onChange={e => setForm(f => ({ ...f, raakvlak: e.target.value }))} style={{ resize: 'vertical' }} /></F>
+            <F label="Haalbaarheidsanalyse" span><textarea className="field-input" rows={2} value={form.haalbaarheidsanalyse ?? ''} onChange={e => setForm(f => ({ ...f, haalbaarheidsanalyse: e.target.value }))} style={{ resize: 'vertical' }} /></F>
             <F label="Opmerking ontwerptechnisch" span><textarea className="field-input" rows={2} value={form.opmerking_ontwerptechnisch ?? ''} onChange={e => setForm(f => ({ ...f, opmerking_ontwerptechnisch: e.target.value }))} style={{ resize: 'vertical' }} /></F>
             <F label="Opmerkingen" span><textarea className="field-input" rows={2} value={form.opmerking_extra ?? ''} onChange={e => setForm(f => ({ ...f, opmerking_extra: e.target.value }))} style={{ resize: 'vertical' }} /></F>
           </div>
@@ -1330,6 +1340,8 @@ const BORINGEN_COLS = new Set<string>([
   /* 1 okt 2026: wie/wanneer een boring voor het laatst is gewijzigd — automatisch gezet
      door save() (zie useLemmerData), niet via het bewerk-formulier. */
   'laatst_gewijzigd_door', 'laatst_gewijzigd_op',
+  /* 12 okt 2026: haalbaarheidsanalyse per boring (zie SQL-migratie). */
+  'haalbaarheidsanalyse', 'haalbaarheid_afgerond',
 ]);
 function fromDb(row: Record<string, unknown>): LemmerBoring {
   return {
