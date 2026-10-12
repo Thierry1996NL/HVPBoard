@@ -456,7 +456,9 @@ export default function LemmerPage() {
     ...(intakeMode ? ['voorstel'] : []),
     ...baseCols,
   ] as ColId[]);
-  const STICKY_META_W = 64;   // breedte pijltje/stappen-kolom
+  /* De lege 'pijltje/stappen'-kolom helemaal links is verwijderd (12 okt 2026) — 0 houdt
+     de left-offsets van de sticky kolommen kloppend. */
+  const STICKY_META_W = 0;
   const STICKY_NUM_W = 40;    // breedte #-kolom
   const STICKY_PROJECT_W = 120;
   const STICKY_BORING_W = 92;
@@ -690,11 +692,12 @@ export default function LemmerPage() {
         onSave={v => saveField(d.id, { [key]: v } as Partial<LemmerBoring>)} />
     ),
   });
-  const textCol = (label: string, key: keyof LemmerBoring, opts?: { sort?: boolean; wide?: boolean }): { label: string; sortKey?: keyof LemmerBoring; cell: (d: LemmerBoring) => React.ReactNode } => ({
+  const textCol = (label: string, key: keyof LemmerBoring, opts?: { sort?: boolean; wide?: boolean; maxW?: number }): { label: string; sortKey?: keyof LemmerBoring; cell: (d: LemmerBoring) => React.ReactNode } => ({
     label, sortKey: opts?.sort === false ? undefined : key,
     cell: d => (
       <InlineCell type="text" value={d[key] as string | undefined} tdStyle={{ fontSize: 12, color: 'var(--text-2)' }}
-        display={<span style={opts?.wide ? { display: 'block', maxWidth: 170, overflow: 'hidden', textOverflow: 'ellipsis' } : undefined}>{(d[key] as string) || '—'}</span>}
+        display={<span title={(opts?.wide || opts?.maxW) && d[key] ? String(d[key]) : undefined}
+          style={opts?.wide || opts?.maxW ? { display: 'block', maxWidth: opts?.maxW ?? 170, overflow: 'hidden', textOverflow: 'ellipsis' } : undefined}>{(d[key] as string) || '—'}</span>}
         onSave={v => saveField(d.id, { [key]: v } as Partial<LemmerBoring>)} />
     ),
   });
@@ -739,7 +742,7 @@ export default function LemmerPage() {
         display={<span>{d.boring_nr || '—'}</span>}
         onSave={v => saveField(d.id, { boring_nr: (v ?? '') as string })} />
     ) },
-    werkpakket_nr: textCol('WP', 'werkpakket_nr'),
+    werkpakket_nr: textCol('WP', 'werkpakket_nr', { maxW: 90 }),
     locatie: textCol('Locatie', 'locatie', { wide: true }),
     lengte_m: { label: 'L (m)', sortKey: 'lengte_m', cell: d => (
       <InlineCell type="number" value={d.lengte_m} tdStyle={{ fontVariantNumeric: 'tabular-nums' }}
@@ -894,7 +897,7 @@ export default function LemmerPage() {
      kolombreedtes van de data-tabel en leggen die op aan de kop-tabel. */
   const bodyTableRef = useRef<HTMLTableElement>(null);
   const [flexColWidths, setFlexColWidths] = useState<number[]>([]);
-  const frozenColCount = 2 + (wp === 0 ? 1 : 0) + 1; // meta, #, [project], boor nr
+  const frozenColCount = 1 + (wp === 0 ? 1 : 0) + 1; // #, [project], boor nr
 
   const measureFlexColWidths = useCallback(() => {
     // Meet over ALLE zichtbare rijen (niet alleen de eerste) en neem per kolom de
@@ -1058,7 +1061,6 @@ export default function LemmerPage() {
       <div ref={headerScrollRef} onScroll={syncScrollFromHeader} className="lem-header-scroll" style={{ overflowX: 'auto' }}>
         <table className="data-table" style={{ marginBottom: 0, tableLayout: flexColWidths.length ? 'fixed' : undefined }}>
           <colgroup>
-            <col style={{ width: STICKY_META_W }} />
             <col style={{ width: STICKY_NUM_W }} />
             {wp === 0 && <col style={{ width: STICKY_PROJECT_W }} />}
             <col style={{ width: STICKY_BORING_W }} />
@@ -1067,7 +1069,6 @@ export default function LemmerPage() {
           </colgroup>
           <thead>
             <tr>
-              <th style={{ ...fixedW(STICKY_META_W), position: 'sticky', left: 0, zIndex: 6, background: stickyGrey, verticalAlign: 'top' }}></th>
               <th style={{ ...fixedW(STICKY_NUM_W), color: 'var(--text-4)', fontWeight: 600, position: 'sticky', left: STICKY_META_W, zIndex: 6, background: stickyGrey, verticalAlign: 'top', padding: 0 }} title="Volgnummer">
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '5px 8px' }}><span>#</span></div>
               </th>
@@ -1162,7 +1163,6 @@ export default function LemmerPage() {
         <div className="tbl-scroll" ref={bodyScrollRef} onScroll={syncScrollFromBody}>
           <table className="data-table" ref={bodyTableRef}>
             <colgroup>
-              <col style={{ width: STICKY_META_W }} />
               <col style={{ width: STICKY_NUM_W }} />
               {wp === 0 && <col style={{ width: STICKY_PROJECT_W }} />}
               <col style={{ width: STICKY_BORING_W }} />
@@ -1180,7 +1180,7 @@ export default function LemmerPage() {
                 (height 0 + overflow hidden) — de breedte telt dan in elke browser mee. */}
             <thead aria-hidden="true">
               <tr style={{ visibility: 'hidden' }}>
-                <th style={{ padding: 0, border: 'none', height: 0 }} /><th style={{ padding: 0, border: 'none', height: 0 }} />
+                <th style={{ padding: 0, border: 'none', height: 0 }} />
                 {wp === 0 && <th style={{ padding: 0, border: 'none', height: 0 }} />}
                 <th style={{ padding: 0, border: 'none', height: 0 }} />
                 {visibleCols.map(id => {
@@ -1199,7 +1199,7 @@ export default function LemmerPage() {
             </thead>
             <tbody>
               {rows.length === 0 ? (
-                <tr><td colSpan={visibleCols.length + 4 + (wp === 0 ? 1 : 0)}><div className="empty-state"><strong>{intakeMode ? 'Geen boringen in de intake' : 'Geen boringen gevonden'}</strong>{intakeMode ? 'Alles is doorgezet naar het project.' : 'Pas de filters aan.'}</div></td></tr>
+                <tr><td colSpan={visibleCols.length + 3 + (wp === 0 ? 1 : 0)}><div className="empty-state"><strong>{intakeMode ? 'Geen boringen in de intake' : 'Geen boringen gevonden'}</strong>{intakeMode ? 'Alles is doorgezet naar het project.' : 'Pas de filters aan.'}</div></td></tr>
               ) : rows.map((d, idx) => {
                 const rowBg = d.gereed ? 'var(--n-bg)'
                   : (!d.vervallen && boringHealth(d) === 'rood') ? 'var(--b-bg)'
@@ -1211,7 +1211,6 @@ export default function LemmerPage() {
                       opacity: d.vervallen ? 0.45 : d.gereed ? 0.6 : 1,
                       background: rowBg === 'var(--surface)' ? undefined : rowBg,
                     }}>
-                      <td style={{ ...fixedW(STICKY_META_W), position: 'sticky', left: 0, zIndex: 3, background: stickyGrey }} />
                       <td style={{ ...fixedW(STICKY_NUM_W), textAlign: 'center', fontSize: 11, color: 'var(--text-4)', fontVariantNumeric: 'tabular-nums', position: 'sticky', left: STICKY_META_W, zIndex: 3, background: stickyGrey }}>{idx + 1}</td>
                       {wp === 0 && (
                         <td style={{ ...fixedW(STICKY_PROJECT_W), position: 'sticky', left: stickyProjectLeft, zIndex: 3, background: rowBg, whiteSpace: 'nowrap', textOverflow: 'ellipsis', color: 'var(--text-2)', fontWeight: 600 }}>
