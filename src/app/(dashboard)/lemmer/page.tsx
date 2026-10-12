@@ -846,10 +846,12 @@ export default function LemmerPage() {
     bundel_configuratie: textCol('Bundel', 'bundel_configuratie'),
     raakvlak: textCol('Raakvlak', 'raakvlak', { sort: false, wide: true }),
     opmerking_extra: { label: 'Opmerkingen', cell: d => (
-      <td className="inline-cell" title="Klik om te bewerken"
-        style={{ fontSize: 12, color: 'var(--text-2)', whiteSpace: 'normal', wordBreak: 'break-word', minWidth: 180, maxWidth: 320, cursor: 'pointer' }}
+      /* Kort gehouden: één regel, afgekapt met '…'. Klik opent een pop-up met de volledige
+         tekst (daar ook te bewerken), zodat alle rijen even hoog en de tabel smal blijft. */
+      <td className="inline-cell" title={d.opmerking_extra ? 'Klik om de volledige opmerking te lezen of te bewerken' : 'Klik om een opmerking toe te voegen'}
+        style={{ fontSize: 12, color: 'var(--text-2)', whiteSpace: 'nowrap', cursor: 'pointer' }}
         onClick={e => { e.stopPropagation(); setRemarkEdit({ id: d.id, value: d.opmerking_extra ?? '' }); }}>
-        {d.opmerking_extra || '—'}
+        <span style={{ display: 'block', width: 220, overflow: 'hidden', textOverflow: 'ellipsis' }}>{d.opmerking_extra || '—'}</span>
       </td>
     ) },
     case_nr: { label: 'Case nr.', cell: d => (
@@ -1311,7 +1313,8 @@ export default function LemmerPage() {
       )}
 
       {remarkEdit && (
-        <Modal open onClose={() => setRemarkEdit(null)} maxWidth={480} title="Opmerking bewerken"
+        <Modal open onClose={() => setRemarkEdit(null)} maxWidth={640}
+          title={`Opmerking — ${data.find(x => x.id === remarkEdit.id)?.boring_nr ?? ''}`}
           footer={<>
             <button className="btn" onClick={() => setRemarkEdit(null)}>Annuleren</button>
             <button className="btn btn-primary" onClick={() => {
@@ -1319,7 +1322,7 @@ export default function LemmerPage() {
               setRemarkEdit(null);
             }}>Opslaan</button>
           </>}>
-          <textarea className="field-input" rows={6} autoFocus value={remarkEdit.value}
+          <textarea className="field-input" rows={14} autoFocus value={remarkEdit.value}
             onChange={e => setRemarkEdit(r => r && { ...r, value: e.target.value })}
             style={{ resize: 'vertical', width: '100%' }} />
         </Modal>
