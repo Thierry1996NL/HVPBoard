@@ -1169,6 +1169,31 @@ export default function LemmerPage() {
               {visibleCols.map(id => <col key={id} />)}
               <col />
             </colgroup>
+            {/* Onzichtbare 'maat-rij' met dezelfde kolomkoppen als de kop-tabel erboven.
+                Door visibility: collapse neemt hij geen hoogte in, maar telt hij wél mee
+                voor de kolombreedte. Zo wordt elke kolom minstens zo breed als zijn kop
+                (langste woord), en lopen lange koppen boven smalle kolommen (bijv. alleen
+                '—' of 'Nee') niet meer door elkaar. measureFlexColWidths neemt die
+                breedte daarna over voor de kop-tabel. */}
+            <thead aria-hidden="true">
+              <tr style={{ visibility: 'collapse' }}>
+                <th style={{ padding: 0 }} /><th style={{ padding: 0 }} />
+                {wp === 0 && <th style={{ padding: 0 }} />}
+                <th style={{ padding: 0 }} />
+                {visibleCols.map(id => {
+                  const col = columns[id];
+                  return (
+                    <th key={id} style={{ position: 'static', padding: 0 }}>
+                      <div style={{ display: 'flex', gap: 4, padding: '5px 8px', whiteSpace: 'normal', wordBreak: 'normal', lineHeight: 1.15 }}>
+                        <span>{col.label}{col.sortKey ? srt(col.sortKey) : null}</span>
+                        <span style={{ flexShrink: 0, fontSize: 10 }}>▾</span>
+                      </div>
+                    </th>
+                  );
+                })}
+                <th style={{ padding: 0 }} />
+              </tr>
+            </thead>
             <tbody>
               {rows.length === 0 ? (
                 <tr><td colSpan={visibleCols.length + 4 + (wp === 0 ? 1 : 0)}><div className="empty-state"><strong>{intakeMode ? 'Geen boringen in de intake' : 'Geen boringen gevonden'}</strong>{intakeMode ? 'Alles is doorgezet naar het project.' : 'Pas de filters aan.'}</div></td></tr>
