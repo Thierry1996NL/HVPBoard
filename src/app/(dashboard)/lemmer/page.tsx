@@ -339,7 +339,9 @@ const IKBEN_KEY = 'hvp_lemmer_ikben_v1';
 const NIET_FILTERBAAR: ColId[] = [];
 
 /* Alle projecten in deze module (werkpakket_id komt overeen met boringen.werkpakket_id). */
-interface ProjectDef { wp: number; naam: string; fase: string; case: string; pl: string; }
+/* sorteerOpBoornr: zonder gekozen sortering staan de boringen op boornummer (001, 001A, 001B, 002 …),
+   zodat het #-volgnummer gelijk oploopt met het boornummer. Anders: volgorde van aanmaken. */
+interface ProjectDef { wp: number; naam: string; fase: string; case: string; pl: string; sorteerOpBoornr?: boolean; }
 const PROJECTEN: ProjectDef[] = [
   { wp: 1, naam: 'Akkrum',      fase: 'UO', case: '311716',        pl: 'Patrick Kroneman' },
   { wp: 2, naam: 'Lemmer-oost', fase: 'DO', case: '283147',        pl: 'Eelco Zijnstra' },
@@ -348,8 +350,8 @@ const PROJECTEN: ProjectDef[] = [
   { wp: 5, naam: 'Urk-Zuid',    fase: 'DO', case: '295885',        pl: 'Patrick Kroneman / Thomas Burkels' },
   { wp: 6, naam: 'Luinjeberd',  fase: 'DO', case: '—',             pl: 'Eelco Zijnstra' },
   { wp: 7, naam: 'Urk WP2',     fase: 'UO', case: '254496/268298', pl: 'Patrick Kroneman' },
-  { wp: 8, naam: 'Spannenburg', fase: '—',  case: '—',             pl: '—' },
-  { wp: 9, naam: 'Oldeberkoop', fase: '—',  case: '—',             pl: '—' },
+  { wp: 8, naam: 'Spannenburg', fase: '—',  case: '—',             pl: '—', sorteerOpBoornr: true },
+  { wp: 9, naam: 'Oldeberkoop', fase: '—',  case: '—',             pl: '—', sorteerOpBoornr: true },
 ];
 
 export default function LemmerPage() {
@@ -593,10 +595,12 @@ export default function LemmerPage() {
       if (sortCol === 'prioritering') return ((PRIO_RANK[String(av ?? '')] ?? 9) - (PRIO_RANK[String(bv ?? '')] ?? 9)) * sortDir;
       return String(av ?? '').localeCompare(String(bv ?? ''), 'nl', { numeric: true }) * sortDir;
     });
+    else if (PROJECTEN.find(p => p.wp === wp)?.sorteerOpBoornr)
+      r = [...r].sort((a, b) => (a.boring_nr ?? '').localeCompare(b.boring_nr ?? '', 'nl', { numeric: true }));
     const fEntries = Object.entries(colFilters).filter(([, v]) => v !== undefined) as [ColId, Set<string>][];
     if (fEntries.length) r = r.filter(d => fEntries.every(([id, set]) => set.has(colFilterValue(d, id))));
     return r;
-  }, [preFiltered, sortCol, sortDir, colFilters]);
+  }, [preFiltered, sortCol, sortDir, colFilters, wp]);
 
   /* Unieke waarden (+ aantal) voor het open kolomfilter-menu — berekend over de rijen die aan
      alle ANDERE actieve filters voldoen, zodat het lijstje in het menu blijft kloppen met wat
