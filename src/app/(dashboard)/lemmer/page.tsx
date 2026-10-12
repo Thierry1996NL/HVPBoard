@@ -1431,6 +1431,8 @@ function useLemmerData() {
     let actor: string | undefined;
     try { actor = localStorage.getItem(IKBEN_KEY) || undefined; } catch { /* negeer */ }
     const stamped: Partial<LemmerBoring> = { ...form, laatst_gewijzigd_door: actor, laatst_gewijzigd_op: new Date().toISOString() };
+    /* Haalbaarheidsanalyse op 'Afgerond' gezet? Dan ook de Ja/Nee-knop 'Haalbaarheid afgerond' op Ja. */
+    if (stamped.haalbaarheidsanalyse === 'Afgerond') stamped.haalbaarheid_afgerond = true;
     if (id) {
       const { error } = await supabase.from('boringen').update(toDb(stamped) as never).eq('id', id);
       if (error) throw new Error(error.message);
