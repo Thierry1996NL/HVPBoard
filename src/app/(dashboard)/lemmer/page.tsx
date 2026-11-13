@@ -204,7 +204,7 @@ interface LemmerBoring {
 /* ── Keuzelijsten ─────────────────────────────────────────────────────────── */
 const TYPES_BORING = ['Gyro', 'Walk-over', 'Walkover', 'Nanodrill', 'Nano-Drill', 'Avegaar', 'Anders'];
 const KLASSEN      = ['9T', '17T', '27T', '50T', '>50T', '120T'];
-const AANNEMERS    = ['Heijmans', 'Heijmans DTE', 'Voskuilen', 'Voskuilen / Heijmans', 'Pol', 'Anders'];
+const AANNEMERS    = ['Heijmans', 'Heijmans DTE', 'Voskuilen', 'Voskuilen / Heijmans', 'Pol', 'Pol/Voskuilen', 'Anders'];
 const STATUSSEN    = ['Niet gestart', 'Gestart', 'Ter controle', 'Goedgekeurd', 'Vrijgegeven', 'Voldoet', 'N.v.t.', 'Vervallen'];
 /* Statussen voor 'HDD Ontwerp' — zelfde set als het oorspronkelijke Excel-dashboard (zie STATUS_COLORS-legenda). */
 /* Statussen voor de haalbaarheidsanalyse per boring (12 okt 2026). */
