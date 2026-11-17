@@ -1088,11 +1088,6 @@ export default function LemmerPage() {
 
       <div className="filter-bar" style={{ display: 'flex', gap: 8, alignItems: 'center', margin: '0.75rem 0', flexWrap: 'wrap' }}>
         <input className="field-input" placeholder="Zoeken…" value={search} onChange={e => setSearch(e.target.value)} style={{ maxWidth: 280 }} />
-        <select className="field-input" style={{ fontSize: 11, maxWidth: 150 }} value={ikBen} onChange={e => kiesIkBen(e.target.value)}
-          title="Wie ben jij? Wordt automatisch vastgelegd bij elke wijziging die je opslaat.">
-          <option value="">Wie ben jij?</option>
-          {personen.map(p => <option key={p.id} value={p.naam}>{p.naam}</option>)}
-        </select>
         <button className="btn" onClick={() => setPersonenOpen(true)} style={{ fontSize: 11 }} title="Personen beheren">👤 Personen</button>
         <button className="btn" onClick={toggleAlleKolommen} style={{ fontSize: 11 }} title={allVisible ? 'Terug naar compacte weergave' : 'Alle projectinfo als kolommen tonen'}>
           {allVisible ? '⤡ Inklappen' : '⤢ Uitklappen'}
@@ -1415,13 +1410,10 @@ export default function LemmerPage() {
                 <code> boring_opmerkingen</code> al uitgevoerd in Supabase?
               </div>
             )}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, fontSize: 12, color: 'var(--text-3)' }}>
-              <span>Nieuwe opmerking als</span>
-              <select className="field-input" style={{ width: 'auto', padding: '2px 6px', fontSize: 12 }} value={ikBen} onChange={e => kiesIkBen(e.target.value)}>
-                <option value="">Wie ben jij?</option>
-                {personen.map(p => <option key={p.id} value={p.naam}>{p.naam}</option>)}
-              </select>
-              <span>· datum en tijd gaan automatisch</span>
+            <div style={{ marginBottom: 6, fontSize: 12, color: 'var(--text-3)' }}>
+              {ikBen
+                ? <>Nieuwe opmerking als <strong style={{ color: 'var(--text-2)' }}>{ikBen}</strong> · datum en tijd gaan automatisch</>
+                : <span style={{ color: 'var(--red, #b42318)' }}>Kies eerst bovenaan bij &quot;Wie ben jij?&quot; wie je bent om een opmerking te plaatsen.</span>}
             </div>
             <textarea className="field-input" rows={4} autoFocus value={remarkEdit.value} placeholder="Typ een nieuwe opmerking…"
               onChange={e => setRemarkEdit(r => r && { ...r, value: e.target.value })}
