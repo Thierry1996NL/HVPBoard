@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { KOLOMMEN_WACHTWOORD } from '@/lib/wachtwoorden';
 
 /* Inhoud uit "Procesbeschrijving HDD-engineering" (v1.0). Statische referentiepagina. */
 
@@ -123,6 +124,14 @@ function ProcesDTE() {
 
       <section><h2 style={{ ...h2, fontSize: 16, marginBottom: 10 }}>Wie is waar eigenaar</h2><Tabel rows={rollen} /></section>
       <section><h2 style={{ ...h2, fontSize: 16, marginBottom: 10 }}>Verplichte aanleverset (gate-checklist)</h2><Tabel rows={aanleverset} /></section>
+
+      <section style={card}>
+        <h2 style={h2}>🔒 Wachtwoord menu Kolommen</h2>
+        <p style={{ ...par, margin: 0 }}>
+          Het menu <strong>Kolommen</strong> op de pagina Boringen is vergrendeld. Wachtwoord:{' '}
+          <code style={{ fontSize: 14, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: 'var(--bg-2, #eef1f5)' }}>{KOLOMMEN_WACHTWOORD}</code>
+        </p>
+      </section>
     </div>
   );
 }
