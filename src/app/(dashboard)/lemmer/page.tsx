@@ -5,6 +5,7 @@ import { useToast } from '@/components/ui/ToastProvider';
 import Modal from '@/components/ui/Modal';
 import { createClient } from '@/lib/supabase/client';
 import { bepaalOpdrachtgever, OPDRACHTGEVERS } from '@/lib/proces';
+import { KOLOMMEN_WACHTWOORD } from '@/lib/wachtwoorden';
 
 /* ── Inline tabel-bouwstenen (zelfstandig, geen extra importbestand) ─────────── */
 const STATUS_COLORS: Record<string, { bg: string; fg: string; pct: number; label: string }> = {
@@ -337,6 +338,8 @@ const HIDDEN_KEY = 'hvp_lemmer_hidden_v13';
 /* Zelfgekozen naam ('wie ben jij') per browser — gebruikt om elke save() te stempelen
    met wie 'm deed (zie useLemmerData → save, en de kolom 'Laatst gewijzigd'). */
 const IKBEN_KEY = 'hvp_lemmer_ikben_v1';
+/* Menu 'Kolommen' zit achter een wachtwoord; eenmaal ontgrendeld blijft het open zolang het tabblad open is. */
+const KOLSLOT_KEY = 'hvp_lemmer_kolommen_open_v1';
 /* Berekende kolommen zonder eigen databaseveld — niet filterbaar via de header. */
 const NIET_FILTERBAAR: ColId[] = [];
 
@@ -441,6 +444,18 @@ export default function LemmerPage() {
   /* Opmerkingen-pop-up: historie (nieuwste boven) + veld om een nieuwe opmerking te plaatsen. */
   const [remarkEdit, setRemarkEdit] = useState<{ id: string; value: string } | null>(null);
   const [remarkBusy, setRemarkBusy] = useState(false);
+  /* Slotje op het menu 'Kolommen'. */
+  const [kolOpen, setKolOpen] = useState(false);
+  useEffect(() => { try { setKolOpen(sessionStorage.getItem(KOLSLOT_KEY) === '1'); } catch { /* negeer */ } }, []);
+  const [kolSlotVraag, setKolSlotVraag] = useState(false);
+  const [kolWw, setKolWw] = useState('');
+  const ontgrendelKolommen = () => {
+    if (kolWw !== KOLOMMEN_WACHTWOORD) { toast('Onjuist wachtwoord', 'error'); return; }
+    setKolOpen(true);
+    try { sessionStorage.setItem(KOLSLOT_KEY, '1'); } catch { /* negeer */ }
+    setKolSlotVraag(false); setKolWw('');
+    setColPickerOpen(true);
+  };
   const plaatsOpmerking = async () => {
     if (!remarkEdit) return;
     const tekst = remarkEdit.value.trim();
@@ -1103,8 +1118,9 @@ export default function LemmerPage() {
         </button>
         <div style={{ flex: 1 }} />
         <div style={{ position: 'relative' }}>
-          <button className="btn" onClick={() => setColPickerOpen(o => !o)} style={{ fontSize: 11 }} title="Kies welke kolommen zichtbaar zijn">
-            ▦ Kolommen ({visibleCols.length}/{columnOrder.length - 1}) ▾
+          <button className="btn" onClick={() => kolOpen ? setColPickerOpen(o => !o) : setKolSlotVraag(true)} style={{ fontSize: 11 }}
+            title={kolOpen ? 'Kies welke kolommen zichtbaar zijn' : 'Vergrendeld — wachtwoord nodig om kolommen aan te passen'}>
+            {kolOpen ? '🔓' : '🔒'} Kolommen ({visibleCols.length}/{columnOrder.length - 1}) ▾
           </button>
           {colPickerOpen && (
             <>
@@ -1446,6 +1462,20 @@ export default function LemmerPage() {
           </Modal>
         );
       })()}
+
+      {kolSlotVraag && (
+        <Modal open onClose={() => { setKolSlotVraag(false); setKolWw(''); }} maxWidth={380} title="🔒 Kolommen ontgrendelen"
+          footer={<>
+            <button className="btn" onClick={() => { setKolSlotVraag(false); setKolWw(''); }}>Annuleren</button>
+            <button className="btn btn-primary" onClick={ontgrendelKolommen}>Ontgrendelen</button>
+          </>}>
+          <p style={{ fontSize: 13, color: 'var(--text-3)', margin: '0 0 10px' }}>Voer het wachtwoord in om de kolommen aan te passen.</p>
+          <input className="field-input" type="password" autoFocus value={kolWw} placeholder="Wachtwoord"
+            onChange={e => setKolWw(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); ontgrendelKolommen(); } }}
+            style={{ width: '100%' }} />
+        </Modal>
+      )}
 
       {personenOpen && (
         <Modal open onClose={() => setPersonenOpen(false)} maxWidth={440} title="Personen beheren"
