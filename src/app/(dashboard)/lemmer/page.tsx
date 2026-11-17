@@ -460,7 +460,7 @@ export default function LemmerPage() {
     if (!remarkEdit) return;
     const tekst = remarkEdit.value.trim();
     if (!tekst) { toast('Typ eerst een opmerking', 'error'); return; }
-    if (!ikBen) { toast('Kies eerst bij "Wie ben jij?" wie je bent', 'error'); return; }
+    if (!ikBen) { toast('Kies eerst je naam bij "Nieuwe opmerking als"', 'error'); return; }
     setRemarkBusy(true);
     try {
       await addOpmerking(remarkEdit.id, tekst, ikBen);
@@ -1426,10 +1426,13 @@ export default function LemmerPage() {
                 <code> boring_opmerkingen</code> al uitgevoerd in Supabase?
               </div>
             )}
-            <div style={{ marginBottom: 6, fontSize: 12, color: 'var(--text-3)' }}>
-              {ikBen
-                ? <>Nieuwe opmerking als <strong style={{ color: 'var(--text-2)' }}>{ikBen}</strong> · datum en tijd gaan automatisch</>
-                : <span style={{ color: 'var(--red, #b42318)' }}>Kies eerst bovenaan bij &quot;Wie ben jij?&quot; wie je bent om een opmerking te plaatsen.</span>}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, fontSize: 12, color: 'var(--text-3)' }}>
+              <span>Nieuwe opmerking als</span>
+              <select className="field-input" style={{ width: 'auto', padding: '2px 6px', fontSize: 12 }} value={ikBen} onChange={e => kiesIkBen(e.target.value)}>
+                <option value="">Wie ben jij?</option>
+                {personen.map(p => <option key={p.id} value={p.naam}>{p.naam}</option>)}
+              </select>
+              <span>· datum en tijd gaan automatisch</span>
             </div>
             <textarea className="field-input" rows={4} autoFocus value={remarkEdit.value} placeholder="Typ een nieuwe opmerking…"
               onChange={e => setRemarkEdit(r => r && { ...r, value: e.target.value })}
