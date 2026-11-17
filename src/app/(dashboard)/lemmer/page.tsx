@@ -142,6 +142,8 @@ function InlineCell({
 
 
 /* ── Type ──────────────────────────────────────────────────────────────────── */
+/* Eén opmerking in de historie van een boring (tabel boring_opmerkingen). */
+interface Opmerking { id: string; boring_id: string; tekst: string; auteur?: string | null; created_at: string; }
 interface LemmerBoring {
   id: string;
   werkpakket_id?: number;
@@ -356,7 +358,7 @@ const PROJECTEN: ProjectDef[] = [
 
 export default function LemmerPage() {
   const toast = useToast();
-  const { data, loading, save, remove, refresh, personen, addPersoon, removePersoon } = useLemmerData();
+  const { data, loading, save, remove, refresh, personen, addPersoon, removePersoon, opmerkingen, opmerkingenFout, addOpmerking } = useLemmerData();
   /* Wie ben jij: geen login in deze app, dus bewaren we een zelfgekozen naam (uit de
      Personen-lijst) per browser in localStorage. save() in useLemmerData leest dit zelf
      uit localStorage en zet het automatisch bij elke wijziging op 'Laatst gewijzigd'. */
@@ -436,7 +438,24 @@ export default function LemmerPage() {
   const [modal, setModal]   = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm]     = useState<Partial<LemmerBoring>>({});
+  /* Opmerkingen-pop-up: historie (nieuwste boven) + veld om een nieuwe opmerking te plaatsen. */
   const [remarkEdit, setRemarkEdit] = useState<{ id: string; value: string } | null>(null);
+  const [remarkBusy, setRemarkBusy] = useState(false);
+  const plaatsOpmerking = async () => {
+    if (!remarkEdit) return;
+    const tekst = remarkEdit.value.trim();
+    if (!tekst) { toast('Typ eerst een opmerking', 'error'); return; }
+    if (!ikBen) { toast('Kies eerst bij "Wie ben jij?" wie je bent', 'error'); return; }
+    setRemarkBusy(true);
+    try {
+      await addOpmerking(remarkEdit.id, tekst, ikBen);
+      /* Laatste opmerking ook op de boring zelf, zodat de kolom (en zoeken/filteren) die toont. */
+      await save(remarkEdit.id, { opmerking_extra: tekst });
+      setRemarkEdit(r => r && { ...r, value: '' });
+      toast('✓ Opmerking geplaatst', 'success');
+    } catch (e) { toast((e as Error).message, 'error'); }
+    finally { setRemarkBusy(false); }
+  };
 
   useEffect(() => {
     try {
@@ -685,7 +704,16 @@ export default function LemmerPage() {
       for (const id of Object.keys(datums)) next[id] = { ...(next[id] ?? {}), ...datums[id] };
       payload = { ...form, stappen: next };
     }
-    try { await save(editId, payload); toast(editId ? '✓ Opgeslagen' : '✓ Toegevoegd', 'success'); setModal(false); }
+    /* Bij bewerken loopt de opmerking via de historie-pop-up; niet overschrijven met een oude waarde. */
+    if (editId) { const { opmerking_extra: _o, ...rest } = payload; void _o; payload = rest; }
+    try {
+      const nieuwId = await save(editId, payload);
+      const eersteOpm = !editId ? form.opmerking_extra?.trim() : undefined;
+      if (nieuwId && eersteOpm) {
+        try { await addOpmerking(nieuwId, eersteOpm, ikBen || null); } catch (e) { console.error(e); }
+      }
+      toast(editId ? '✓ Opgeslagen' : '✓ Toegevoegd', 'success'); setModal(false);
+    }
     catch (e) { toast((e as Error).message, 'error'); }
   };
   const handleDelete = async () => {
@@ -877,11 +905,28 @@ export default function LemmerPage() {
     opmerking_extra: { label: 'Opmerkingen', cell: d => (
       /* Kort gehouden: één regel, afgekapt met '…'. Klik opent een pop-up met de volledige
          tekst (daar ook te bewerken), zodat alle rijen even hoog en de tabel smal blijft. */
-      <td className="inline-cell" title={d.opmerking_extra ? 'Klik om de volledige opmerking te lezen of te bewerken' : 'Klik om een opmerking toe te voegen'}
-        style={{ fontSize: 12, color: 'var(--text-2)', whiteSpace: 'nowrap', cursor: 'pointer' }}
-        onClick={e => { e.stopPropagation(); setRemarkEdit({ id: d.id, value: d.opmerking_extra ?? '' }); }}>
-        <span style={{ display: 'block', width: 220, overflow: 'hidden', textOverflow: 'ellipsis' }}>{d.opmerking_extra || '—'}</span>
-      </td>
+      (() => {
+        const lijst = opmerkingen[d.id] ?? [];
+        const laatste = lijst[0];
+        const tekst = laatste?.tekst ?? d.opmerking_extra;
+        return (
+          <td className="inline-cell"
+            title={tekst ? `Klik voor alle opmerkingen (${lijst.length || 1})` : 'Klik om een opmerking te plaatsen'}
+            style={{ fontSize: 12, color: 'var(--text-2)', whiteSpace: 'nowrap', cursor: 'pointer' }}
+            onClick={e => { e.stopPropagation(); setRemarkEdit({ id: d.id, value: '' }); }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6, width: 260 }}>
+              {lijst.length > 1 && (
+                <span style={{ flexShrink: 0, fontSize: 10, fontWeight: 600, padding: '1px 6px', borderRadius: 10,
+                  background: 'var(--bg-2, #eef1f5)', color: 'var(--text-3)' }}>{lijst.length}</span>
+              )}
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {tekst || '—'}
+                {laatste && <span style={{ color: 'var(--text-4)' }}> · {laatste.auteur || 'onbekend'}, {fmtDate(laatste.created_at)}</span>}
+              </span>
+            </span>
+          </td>
+        );
+      })()
     ) },
     case_nr: { label: 'Case nr.', cell: d => (
       <td style={{ whiteSpace: 'nowrap', color: 'var(--text-2)' }}>
@@ -1336,26 +1381,79 @@ export default function LemmerPage() {
             <F label="Project gereed"><label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginTop: 6 }}><input type="checkbox" checked={form.gereed ?? false} onChange={e => setForm(f => ({ ...f, gereed: e.target.checked }))} style={{ width: 15, height: 15 }} /><span style={{ fontSize: 12 }}>Ja, gereed</span></label></F>
             <F label="Raakvlak" span><textarea className="field-input" rows={2} value={form.raakvlak ?? ''} onChange={e => setForm(f => ({ ...f, raakvlak: e.target.value }))} style={{ resize: 'vertical' }} /></F>
             <F label="Opmerking ontwerptechnisch" span><textarea className="field-input" rows={2} value={form.opmerking_ontwerptechnisch ?? ''} onChange={e => setForm(f => ({ ...f, opmerking_ontwerptechnisch: e.target.value }))} style={{ resize: 'vertical' }} /></F>
-            <F label="Opmerkingen" span><textarea className="field-input" rows={2} value={form.opmerking_extra ?? ''} onChange={e => setForm(f => ({ ...f, opmerking_extra: e.target.value }))} style={{ resize: 'vertical' }} /></F>
+            {editId ? (
+              <F label="Opmerkingen" span>
+                <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 4 }}>
+                  {(opmerkingen[editId]?.length ?? 0)} opmerking(en). Plaats en bekijk opmerkingen via de kolom <strong>Opmerkingen</strong> in de tabel,
+                  zodat altijd vastligt wie wat wanneer schreef.
+                </div>
+              </F>
+            ) : (
+              <F label="Opmerkingen" span><textarea className="field-input" rows={2} value={form.opmerking_extra ?? ''} onChange={e => setForm(f => ({ ...f, opmerking_extra: e.target.value }))} style={{ resize: 'vertical' }} /></F>
+            )}
           </div>
         </Modal>
       )}
 
-      {remarkEdit && (
-        <Modal open onClose={() => setRemarkEdit(null)} maxWidth={640}
-          title={`Opmerking — ${data.find(x => x.id === remarkEdit.id)?.boring_nr ?? ''}`}
-          footer={<>
-            <button className="btn" onClick={() => setRemarkEdit(null)}>Annuleren</button>
-            <button className="btn btn-primary" onClick={() => {
-              saveField(remarkEdit.id, { opmerking_extra: remarkEdit.value });
-              setRemarkEdit(null);
-            }}>Opslaan</button>
-          </>}>
-          <textarea className="field-input" rows={14} autoFocus value={remarkEdit.value}
-            onChange={e => setRemarkEdit(r => r && { ...r, value: e.target.value })}
-            style={{ resize: 'vertical', width: '100%' }} />
-        </Modal>
-      )}
+      {remarkEdit && (() => {
+        const lijst = opmerkingen[remarkEdit.id] ?? [];
+        const boring = data.find(x => x.id === remarkEdit.id);
+        /* Oude opmerking van vóór de historie (nog niet overgezet): toon als eerste regel. */
+        const oud = lijst.length === 0 && boring?.opmerking_extra ? boring.opmerking_extra : null;
+        return (
+          <Modal open onClose={() => setRemarkEdit(null)} maxWidth={640}
+            title={`Opmerkingen — ${boring?.boring_nr ?? ''}`}
+            footer={<>
+              <button className="btn" onClick={() => setRemarkEdit(null)}>Sluiten</button>
+              <button className="btn btn-primary" disabled={remarkBusy || !remarkEdit.value.trim()} onClick={plaatsOpmerking}>
+                {remarkBusy ? 'Bezig…' : 'Plaatsen'}
+              </button>
+            </>}>
+            {opmerkingenFout && (
+              <div style={{ fontSize: 12, color: 'var(--red, #b42318)', marginBottom: 10 }}>
+                De opmerkingen-historie kon niet geladen worden ({opmerkingenFout}). Is de SQL-migratie
+                <code> boring_opmerkingen</code> al uitgevoerd in Supabase?
+              </div>
+            )}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, fontSize: 12, color: 'var(--text-3)' }}>
+              <span>Nieuwe opmerking als</span>
+              <select className="field-input" style={{ width: 'auto', padding: '2px 6px', fontSize: 12 }} value={ikBen} onChange={e => kiesIkBen(e.target.value)}>
+                <option value="">Wie ben jij?</option>
+                {personen.map(p => <option key={p.id} value={p.naam}>{p.naam}</option>)}
+              </select>
+              <span>· datum en tijd gaan automatisch</span>
+            </div>
+            <textarea className="field-input" rows={4} autoFocus value={remarkEdit.value} placeholder="Typ een nieuwe opmerking…"
+              onChange={e => setRemarkEdit(r => r && { ...r, value: e.target.value })}
+              onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); plaatsOpmerking(); } }}
+              style={{ resize: 'vertical', width: '100%' }} />
+
+            <div style={{ marginTop: 16, fontSize: 11, fontWeight: 600, letterSpacing: '.04em', textTransform: 'uppercase', color: 'var(--text-4)' }}>
+              Historie ({lijst.length || (oud ? 1 : 0)})
+            </div>
+            <div style={{ marginTop: 6, maxHeight: 340, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {lijst.length === 0 && !oud && (
+                <div style={{ fontSize: 13, color: 'var(--text-4)', padding: '8px 0' }}>Nog geen opmerkingen.</div>
+              )}
+              {lijst.map(o => (
+                <div key={o.id} style={{ border: '1px solid var(--border, #e5e7eb)', borderRadius: 8, padding: '8px 10px' }}>
+                  <div style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 4 }}>
+                    <strong style={{ color: 'var(--text-2)' }}>{o.auteur || 'Onbekend'}</strong>
+                    {' · '}{new Date(o.created_at).toLocaleString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  </div>
+                  <div style={{ fontSize: 13, whiteSpace: 'pre-wrap', color: 'var(--text-1, inherit)' }}>{o.tekst}</div>
+                </div>
+              ))}
+              {oud && (
+                <div style={{ border: '1px dashed var(--border, #e5e7eb)', borderRadius: 8, padding: '8px 10px' }}>
+                  <div style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 4 }}>Eerdere opmerking (zonder naam en datum)</div>
+                  <div style={{ fontSize: 13, whiteSpace: 'pre-wrap' }}>{oud}</div>
+                </div>
+              )}
+            </div>
+          </Modal>
+        );
+      })()}
 
       {personenOpen && (
         <Modal open onClose={() => setPersonenOpen(false)} maxWidth={440} title="Personen beheren"
@@ -1451,6 +1549,31 @@ function useLemmerData() {
   const [data, setData] = useState<LemmerBoring[]>([]);
   const [loading, setLoading] = useState(true);
   const [personen, setPersonen] = useState<Persoon[]>([]);
+  /* Opmerkingen-historie, gegroepeerd per boring_id, nieuwste eerst. */
+  const [opmerkingen, setOpmerkingen] = useState<Record<string, Opmerking[]>>({});
+  const [opmerkingenFout, setOpmerkingenFout] = useState<string | null>(null);
+  const loadOpmerkingen = useCallback(async () => {
+    try {
+      const supabase = createClient();
+      const { data: rows, error } = await supabase.from('boring_opmerkingen').select('*').order('created_at', { ascending: false });
+      if (error) throw error;
+      const grouped: Record<string, Opmerking[]> = {};
+      for (const r of (rows ?? []) as unknown as Opmerking[]) (grouped[r.boring_id] ??= []).push(r);
+      setOpmerkingen(grouped);
+      setOpmerkingenFout(null);
+    } catch (err) {
+      console.error('Fout bij laden opmerkingen:', err);
+      setOpmerkingenFout((err as { message?: string }).message ?? 'onbekende fout');
+    }
+  }, []);
+  const addOpmerking = useCallback(async (boringId: string, tekst: string, auteur: string | null) => {
+    const supabase = createClient();
+    const { data: ins, error } = await supabase.from('boring_opmerkingen')
+      .insert({ boring_id: boringId, tekst, auteur } as never).select();
+    if (error) throw new Error(error.message);
+    const nieuw = (ins ?? []) as unknown as Opmerking[];
+    setOpmerkingen(prev => ({ ...prev, [boringId]: [...nieuw, ...(prev[boringId] ?? [])] }));
+  }, []);
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -1469,7 +1592,7 @@ function useLemmerData() {
       setPersonen((rows ?? []) as unknown as Persoon[]);
     } catch (err) { console.error('Fout bij laden personen:', err); }
   }, []);
-  useEffect(() => { load(); loadPersonen(); }, [load, loadPersonen]);
+  useEffect(() => { load(); loadPersonen(); loadOpmerkingen(); }, [load, loadPersonen, loadOpmerkingen]);
   const addPersoon = useCallback(async (naam: string) => {
     const supabase = createClient();
     const { data: ins, error } = await supabase.from('personen').insert({ naam } as never).select();
@@ -1496,10 +1619,12 @@ function useLemmerData() {
       const { error } = await supabase.from('boringen').update(toDb(stamped) as never).eq('id', id);
       if (error) throw new Error(error.message);
       setData(prev => prev.map(r => r.id === id ? { ...r, ...stamped } : r));
+      return id;
     } else {
       const { data: ins, error } = await supabase.from('boringen').insert(toDb(stamped) as never).select();
       if (error) throw new Error(error.message);
       if (ins) setData(prev => [...prev, ...ins.map(r => fromDb(r as Record<string, unknown>))]);
+      return (ins?.[0] as { id?: string } | undefined)?.id ?? null;
     }
   }, []);
   const remove = useCallback(async (id: string) => {
@@ -1513,6 +1638,7 @@ function useLemmerData() {
     const { data: rows, error } = await supabase.from('boringen').select('*').order('created_at', { ascending: true });
     if (error) throw new Error(error.message);
     setData((rows ?? []).map(r => fromDb(r as Record<string, unknown>)));
-  }, []);
-  return { data, loading, save, remove, reload: load, refresh, personen, addPersoon, removePersoon };
+    await loadOpmerkingen();
+  }, [loadOpmerkingen]);
+  return { data, loading, save, remove, reload: load, refresh, personen, addPersoon, removePersoon, opmerkingen, opmerkingenFout, addOpmerking };
 }
