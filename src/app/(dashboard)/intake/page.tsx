@@ -5,6 +5,7 @@ import { useToast } from '@/components/ui/ToastProvider';
 import Modal from '@/components/ui/Modal';
 import { createClient } from '@/lib/supabase/client';
 import { bepaalOpdrachtgever, OPDRACHTGEVERS } from '@/lib/proces';
+import { useProjectLijst } from '@/hooks/useProjectLijst';
 
 interface Boring {
   id: string;
@@ -21,7 +22,7 @@ interface Boring {
   intake_compleet?: boolean;
 }
 
-const PROJECTEN = [
+const PROJECTEN_BASIS: { wp: number; naam: string }[] = [
   { wp: 1, naam: 'Akkrum' },
   { wp: 2, naam: 'Lemmer-oost' },
   { wp: 3, naam: 'Wolvega' },
@@ -35,6 +36,8 @@ const PROJECTEN = [
 
 export default function IntakePage() {
   const toast = useToast();
+  /* Vaste lijst + elk nieuw project uit 'werkpakketten' (bijv. Lemmer Oost extra). */
+  const PROJECTEN = useProjectLijst(PROJECTEN_BASIS, ({ wp, naam }) => ({ wp, naam }));
   const [data, setData] = useState<Boring[]>([]);
   const [wp, setWp] = useState<number>(0);
   const [loading, setLoading] = useState(true);
