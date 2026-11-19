@@ -6,6 +6,7 @@ import Modal from '@/components/ui/Modal';
 import { createClient } from '@/lib/supabase/client';
 import { bepaalOpdrachtgever, OPDRACHTGEVERS } from '@/lib/proces';
 import { KOLOMMEN_WACHTWOORD } from '@/lib/wachtwoorden';
+import { useProjectLijst } from '@/hooks/useProjectLijst';
 
 /* ── Inline tabel-bouwstenen (zelfstandig, geen extra importbestand) ─────────── */
 const STATUS_COLORS: Record<string, { bg: string; fg: string; pct: number; label: string }> = {
@@ -347,7 +348,7 @@ const NIET_FILTERBAAR: ColId[] = [];
 /* sorteerOpBoornr: zonder gekozen sortering staan de boringen op boornummer (001, 001A, 001B, 002 …),
    zodat het #-volgnummer gelijk oploopt met het boornummer. Anders: volgorde van aanmaken. */
 interface ProjectDef { wp: number; naam: string; fase: string; case: string; pl: string; sorteerOpBoornr?: boolean; }
-const PROJECTEN: ProjectDef[] = [
+const PROJECTEN_BASIS: ProjectDef[] = [
   { wp: 1, naam: 'Akkrum',      fase: 'UO', case: '311716',        pl: 'Patrick Kroneman' },
   { wp: 2, naam: 'Lemmer-oost', fase: 'DO', case: '283147',        pl: 'Eelco Zijnstra' },
   { wp: 3, naam: 'Wolvega',     fase: 'UO', case: '290538',        pl: 'Patrick Kroneman' },
@@ -361,6 +362,9 @@ const PROJECTEN: ProjectDef[] = [
 
 export default function LemmerPage() {
   const toast = useToast();
+  /* Vaste lijst + elk nieuw project uit 'werkpakketten' (bijv. Lemmer Oost extra). */
+  const PROJECTEN = useProjectLijst(PROJECTEN_BASIS, ({ wp, naam, case: c, pl }) =>
+    ({ wp, naam, fase: '—', case: c, pl, sorteerOpBoornr: true }));
   const { data, loading, save, remove, refresh, personen, addPersoon, removePersoon, opmerkingen, opmerkingenFout, addOpmerking } = useLemmerData();
   /* Wie ben jij: geen login in deze app, dus bewaren we een zelfgekozen naam (uit de
      Personen-lijst) per browser in localStorage. save() in useLemmerData leest dit zelf
@@ -634,7 +638,7 @@ export default function LemmerPage() {
     const fEntries = Object.entries(colFilters).filter(([, v]) => v !== undefined) as [ColId, Set<string>][];
     if (fEntries.length) r = r.filter(d => fEntries.every(([id, set]) => set.has(colFilterValue(d, id))));
     return r;
-  }, [preFiltered, sortCol, sortDir, colFilters, wp]);
+  }, [preFiltered, sortCol, sortDir, colFilters, wp, PROJECTEN]);
 
   /* Unieke waarden (+ aantal) voor het open kolomfilter-menu — berekend over de rijen die aan
      alle ANDERE actieve filters voldoen, zodat het lijstje in het menu blijft kloppen met wat
@@ -652,7 +656,7 @@ export default function LemmerPage() {
       .sort((a, b) => id === 'prioritering'
         ? (PRIO_RANK[a.value] ?? 9) - (PRIO_RANK[b.value] ?? 9)
         : a.value.localeCompare(b.value, 'nl', { numeric: true }));
-  }, [filterMenu, preFiltered, colFilters]);
+  }, [filterMenu, preFiltered, colFilters, PROJECTEN]);
 
   const filterOptionsFiltered = useMemo(() => {
     if (!filterSearch.trim()) return filterOptions;
